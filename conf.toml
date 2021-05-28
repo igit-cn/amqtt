@@ -1,0 +1,10 @@
+TcpHost = "0.0.0.0"
+TcpPort = 1884
+TcpTsl = false
+
+WsHost = "0.0.0.0"
+WsPort = 8085
+WsTsl = false
+
+CaFile = "cafile"
+CeKey = "cefile"
