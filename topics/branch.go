@@ -8,17 +8,19 @@ import (
 )
 
 type Branch struct {
+	Trie     *Trie
 	Name     string
 	Parent   *Branch
 	Leaves   map[string]*Leaf
 	Branches map[string]*Branch
 }
 
-func NewBranch() *Branch {
+func NewBranch(trie *Trie) *Branch {
 	node := new(Branch)
 	node.Leaves = make(map[string]*Leaf)
 	node.Branches = make(map[string]*Branch)
 	node.Parent = nil
+	node.Trie = trie
 	return node
 }
 
@@ -42,7 +44,7 @@ func (b *Branch) AddBranch(client *clients.Client, topic string, keys []string, 
 	fmt.Printf("AddBranch KEY:%s\n", key)
 	branch, ok := b.Branches[key]
 	if !ok {
-		branch = NewBranch()
+		branch = NewBranch(b.Trie)
 		branch.Parent = b
 		branch.Name = key
 		b.Branches[branch.Name] = branch
@@ -107,7 +109,7 @@ func (b *Branch) AddRetain(topic string, keys []string, index int, retain *Retai
 	fmt.Printf("AddRetain KEY:%s\n", key)
 	branch, ok := b.Branches[key]
 	if !ok {
-		branch = NewBranch()
+		branch = NewBranch(b.Trie)
 		branch.Parent = b
 		branch.Name = key
 		b.Branches[branch.Name] = branch

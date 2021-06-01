@@ -3,7 +3,7 @@ package clients
 import (
 	"context"
 	"net"
-	"sync"
+	// "sync"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
 )
@@ -14,7 +14,6 @@ type Client struct {
 	Subs       []string
 	Ctx        context.Context
 	CancelFunc context.CancelFunc
-	mu         sync.Mutex
 }
 
 func NewClient(conn net.Conn) *Client {
@@ -34,10 +33,6 @@ func (c *Client) ReadPacket() (packets.ControlPacket, error) {
 }
 
 func (c *Client) WritePacket(packet packets.ControlPacket) error {
-	c.mu.Lock()
-	defer func(c *Client) {
-		c.mu.Unlock()
-	}(c)
 	err := packet.Write(c.Conn)
 	return err
 }

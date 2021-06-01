@@ -80,17 +80,19 @@ func (s *Server) isQos2MsgsFull() bool {
 }
 
 func (s *Server) DoPublish(topic string, packet *packets.PublishPacket) {
-	subs := s.Topics.Search(topic)
-	for _, leaf := range subs {
-		for _, client := range leaf.Clients {
-			client.WritePacket(packet)
+	leaves := s.Topics.Search(topic)
+	for _, leaf := range leaves {
+		if leaf != nil {
+			for _, client := range leaf.Clients {
+				client.WritePacket(packet)
+			}
 		}
 	}
 }
 
 func (s *Server) ProcessPublish(client *clients.Client, packet *packets.PublishPacket) {
 	topic := packet.TopicName
-	fmt.Printf("ProcessPublish topic:%+v, clientId:%s, MessageID:%d\n", topic, client.ClientId, packet.MessageID)
+	// fmt.Printf("ProcessPublish topic:%+v, clientId:%s, MessageID:%d\n", topic, client.ClientId, packet.MessageID)
 
 	switch packet.Qos {
 	case config.QosAtMostOnce:
