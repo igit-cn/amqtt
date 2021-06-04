@@ -1,10 +1,7 @@
-package topics
+package trie
 
 import (
-	"fmt"
 	"strings"
-
-	"github.com/werbenhu/amq/clients"
 )
 
 type Branch struct {
@@ -24,24 +21,16 @@ func NewBranch(trie *Trie) *Branch {
 	return node
 }
 
-func (n *Branch) GetLeaves() []*Leaf {
+func (b *Branch) GetLeaves() []*Leaf {
 	leaves := make([]*Leaf, 0)
-	for _, v := range n.Leaves {
+	for _, v := range b.Leaves {
 		leaves = append(leaves, v)
 	}
 	return leaves
 }
 
-func (n *Branch) Print() {
-	fmt.Printf("name:%s\n", n.Name)
-	for _, branch := range n.Branches {
-		branch.Print()
-	}
-}
-
-func (b *Branch) AddBranch(client *clients.Client, topic string, keys []string, index int) {
+func (b *Branch) AddBranch(topic string, identity string, subscriber interface{}, keys []string, index int) {
 	key := strings.TrimSpace(keys[index])
-	fmt.Printf("AddBranch KEY:%s\n", key)
 	branch, ok := b.Branches[key]
 	if !ok {
 		branch = NewBranch(b.Trie)
@@ -51,33 +40,31 @@ func (b *Branch) AddBranch(client *clients.Client, topic string, keys []string, 
 	}
 
 	if branch.Name == "#" {
-		branch.AddLeaf(client, topic)
+		branch.AddLeaf(topic, identity, subscriber)
 	} else if index+1 < len(keys) {
-		branch.AddBranch(client, topic, keys, index+1)
+		branch.AddBranch(topic, identity, subscriber, keys, index+1)
 	} else {
-		branch.AddLeaf(client, topic)
+		branch.AddLeaf(topic, identity, subscriber)
 	}
 }
 
-func (b *Branch) AddLeaf(client *clients.Client, topic string) *Leaf {
-	fmt.Printf("AddLeaf topic:%s b:%+v\n", topic, b)
+func (b *Branch) AddLeaf(topic string, identity string, subscriber interface{}) *Leaf {
 	leaf, ok := b.Leaves[topic]
 	if !ok {
 		leaf = NewLeaf(b)
 		b.Leaves[topic] = leaf
 	}
-	if client != nil {
-		leaf.Clients[topic] = client
+	if subscriber != nil {
+		leaf.Subscribers[identity] = subscriber
 	}
 	return leaf
 }
 
-func (b *Branch) RemoveLeaf(topic string, clientId string) {
-	fmt.Printf("RemoveLeaf topic:%s b:%+v\n", topic, b)
+func (b *Branch) RemoveLeaf(topic string, identity string) {
 	leaf, ok := b.Leaves[topic]
 	if ok {
-		leaf.RemoveClient(topic, clientId)
-		if len(leaf.Clients) == 0 && leaf.Retain == nil {
+		leaf.RemoveSubscriber(identity)
+		if len(leaf.Subscribers) == 0 && leaf.Retain == nil {
 			delete(b.Leaves, topic)
 		}
 	}
@@ -91,22 +78,21 @@ func (b *Branch) CheckClean() {
 	}
 }
 
-func (b *Branch) ScanRemoveLeaf(clientId string, topic string, keys []string, index int) {
+func (b *Branch) ScanRemoveLeaf(identity string, topic string, keys []string, index int) {
 	if b.Name == "#" {
-		b.RemoveLeaf(topic, clientId)
+		b.RemoveLeaf(topic, identity)
 	} else if index+1 == len(keys) && (b.Name == "+" || b.Name == keys[index]) {
-		b.RemoveLeaf(topic, clientId)
+		b.RemoveLeaf(topic, identity)
 	} else if b.Name == "+" || b.Name == keys[index] {
 		for _, branch := range b.Branches {
-			branch.ScanRemoveLeaf(clientId, topic, keys, index+1)
+			branch.ScanRemoveLeaf(identity, topic, keys, index+1)
 		}
 	}
 	b.CheckClean()
 }
 
-func (b *Branch) AddRetain(topic string, keys []string, index int, retain *RetainPacket) {
+func (b *Branch) AddRetain(topic string, keys []string, index int, retain interface{}) {
 	key := strings.TrimSpace(keys[index])
-	fmt.Printf("AddRetain KEY:%s\n", key)
 	branch, ok := b.Branches[key]
 	if !ok {
 		branch = NewBranch(b.Trie)
@@ -118,13 +104,12 @@ func (b *Branch) AddRetain(topic string, keys []string, index int, retain *Retai
 	if index+1 < len(keys) {
 		branch.AddRetain(topic, keys, index+1, retain)
 	} else {
-		leaf := branch.AddLeaf(nil, topic)
+		leaf := branch.AddLeaf(topic, "", nil)
 		leaf.SetRetain(retain)
 	}
 }
 
 func (b *Branch) RemoveRetain(topic string, keys []string, index int) {
-	fmt.Printf("RemoveRetain KEY:%s\n", keys[index])
 	if index+1 == len(keys) && b.Name == keys[index] {
 		for k := range b.Leaves {
 			b.Leaves[k].RemoveRetain()
@@ -136,8 +121,8 @@ func (b *Branch) RemoveRetain(topic string, keys []string, index int) {
 	}
 }
 
-func (b *Branch) GetRestRetain() []*RetainPacket {
-	retains := make([]*RetainPacket, 0)
+func (b *Branch) GetRestRetain() []interface{} {
+	retains := make([]interface{}, 0)
 	for k := range b.Leaves {
 		if b.Leaves[k].Retain != nil {
 			retains = append(retains, b.Leaves[k].Retain)
@@ -149,8 +134,8 @@ func (b *Branch) GetRestRetain() []*RetainPacket {
 	return retains
 }
 
-func (b *Branch) SearchRetain(topic string, keys []string, index int) []*RetainPacket {
-	retains := make([]*RetainPacket, 0)
+func (b *Branch) SearchRetain(topic string, keys []string, index int) []interface{} {
+	retains := make([]interface{}, 0)
 	if keys[index] == "#" {
 		retains = append(retains, b.GetRestRetain()...)
 	} else if index+1 == len(keys) && (keys[index] == "+" || b.Name == keys[index]) {
@@ -168,7 +153,6 @@ func (b *Branch) SearchRetain(topic string, keys []string, index int) []*RetainP
 }
 
 func (b *Branch) SearchLeaves(topic string, keys []string, index int) []*Leaf {
-	fmt.Printf("SearchLeaves key:%s, name:%s\n", keys[index], b.Name)
 	leaves := make([]*Leaf, 0)
 	if b.Name == "#" {
 		return b.GetLeaves()
@@ -177,20 +161,6 @@ func (b *Branch) SearchLeaves(topic string, keys []string, index int) []*Leaf {
 	} else if b.Name == "+" || b.Name == keys[index] {
 		for _, branch := range b.Branches {
 			leaves = append(leaves, branch.SearchLeaves(topic, keys, index+1)...)
-		}
-	}
-	return leaves
-}
-
-func (b *Branch) AddLeaves(topic string, keys []string, index int) []*Leaf {
-	leaves := make([]*Leaf, 0)
-	if b.Name == "#" {
-		return b.GetLeaves()
-	} else if index+1 == len(keys) && (b.Name == "+" || b.Name == keys[index]) {
-		return b.GetLeaves()
-	} else if b.Name == "+" || b.Name == keys[index] {
-		for _, branch := range b.Branches {
-			leaves = append(leaves, branch.AddLeaves(topic, keys, index+1)...)
 		}
 	}
 	return leaves

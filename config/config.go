@@ -6,6 +6,13 @@ import (
 	"log"
 )
 
+type Cluster struct {
+	Name string
+	Host string
+	Port int
+	Tsl  bool
+}
+
 type Config struct {
 	TcpHost string
 	TcpPort int
@@ -17,6 +24,13 @@ type Config struct {
 
 	CaFile string
 	CeKey  string
+
+	ClusterName string
+	ClusterHost string
+	ClusterPort int
+	ClusterTsl  bool
+
+	Clusters []Cluster
 }
 
 var cfg Config
@@ -26,6 +40,17 @@ func init() {
 		log.Fatalf("read conf.toml Err:%s\n", err)
 		return
 	}
+}
+
+func Clusters() []Cluster {
+	return cfg.Clusters
+}
+
+func ClusterHost() string {
+	if cfg.ClusterHost != "" {
+		return fmt.Sprintf("%s:%d", cfg.ClusterHost, cfg.ClusterPort)
+	}
+	return ""
 }
 
 func TcpHost() string {
