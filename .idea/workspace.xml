@@ -20,18 +20,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="517f6227-0246-49a0-923b-f01c4924efd5" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/broker/broker.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/clients/retain.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/trie/leaf.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/clients/clients.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/conf.toml" beforeDir="false" afterPath="$PROJECT_DIR$/conf.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/server.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/topics/branch.go" beforeDir="false" afterPath="$PROJECT_DIR$/trie/branch.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/topics/leaf.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/topics/retain.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/topics/trie.go" beforeDir="false" afterPath="$PROJECT_DIR$/trie/trie.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cluster/processor.go" beforeDir="false" afterPath="$PROJECT_DIR$/cluster/processor.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

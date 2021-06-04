@@ -78,8 +78,6 @@ func (s *Processor) ProcessDisconnect(client *clients.Client) {
 
 func (s *Processor) ProcessConnack(client *clients.Client, cp *packets.ConnackPacket) {
 	clientId := client.GetConn().RemoteAddr().String()
-	fmt.Printf("ProcessConnack clientId:%s\n", clientId)
-
 	if old, ok := s.server.ClusterClients().Load(clientId); ok {
 		oldClient := old.(*clients.Client)
 		oldClient.Close()
@@ -89,7 +87,6 @@ func (s *Processor) ProcessConnack(client *clients.Client, cp *packets.ConnackPa
 }
 
 func (s *Processor) ProcessConnect(client *clients.Client, cp *packets.ConnectPacket) {
-
 	clientId := cp.ClientIdentifier
 	if old, ok := s.server.ClusterClients().Load(clientId); ok {
 		oldClient := old.(*clients.Client)
