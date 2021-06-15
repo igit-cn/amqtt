@@ -3,20 +3,19 @@ package broker
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
+	"net"
+
 	"github.com/eclipse/paho.mqtt.golang/packets"
-	"github.com/werbenhu/amq/clients"
 	"github.com/werbenhu/amq/config"
 	"github.com/werbenhu/amq/ifs"
-	"log"
-	"net"
+	"github.com/werbenhu/amq/logger"
 )
 
 type Broker struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	server    ifs.Server
-	processor *Processor
+	processor ifs.Processor
 }
 
 func NewBroker(server ifs.Server) *Broker {
@@ -27,38 +26,20 @@ func NewBroker(server ifs.Server) *Broker {
 	return s
 }
 
-func (s *Broker) ReadLoop(client *clients.Client) {
-	for {
-		select {
-		case <-client.Done():
-			return
-		default:
-			packet, err := client.ReadPacket()
-			if err != nil {
-				fmt.Printf("read packet error: %+v\n", err)
-				packet := packets.NewControlPacket(packets.Disconnect).(*packets.DisconnectPacket)
-				s.processor.ProcessMessage(client, packet)
-				return
-			}
-			s.processor.ProcessMessage(client, packet)
-		}
-	}
-}
-
 func (s *Broker) Handler(conn net.Conn) {
-	client := clients.NewClient(conn, s.server.BrokerTopics())
+	client := NewClient(conn, s.server.BrokerTopics())
 	packet, err := client.ReadPacket()
 	if err != nil {
-		fmt.Println("read connect packet error: ", err)
+		logger.Error("read connect packet error: ", err)
 		return
 	}
 	cp, ok := packet.(*packets.ConnectPacket)
 	if !ok {
-		fmt.Println("received msg that was not connect")
+		logger.Error("received msg that was not connect")
 		return
 	}
 	s.processor.ProcessConnect(client, cp)
-	s.ReadLoop(client)
+	client.ReadLoop(s.processor)
 }
 
 func (s *Broker) Start() {
@@ -69,28 +50,32 @@ func (s *Broker) Start() {
 	if !config.IsTcpTsl() {
 		tcpListener, err = net.Listen("tcp", tcpHost)
 		if err != nil {
-			log.Fatalf("tcp listen to %s Err:%s\n", tcpHost, err)
+			logger.Fatalf("tcp listen to %s Err:%s\n", tcpHost, err)
 		}
 	} else {
 		cert, err := tls.LoadX509KeyPair(config.CaFile(), config.CeKey())
 		if err != nil {
-			log.Fatalf("tcp LoadX509KeyPair ce file: %s Err:%s\n", config.CaFile(), err)
+			logger.Fatalf("tcp LoadX509KeyPair ce file: %s Err:%s\n", config.CaFile(), err)
 		}
 		tcpListener, err = tls.Listen("tcp", tcpHost, &tls.Config{
 			Certificates: []tls.Certificate{cert},
 		})
 		if err != nil {
-			log.Fatalf("tsl listen to %s Err:%s\n", tcpHost, err)
+			logger.Fatalf("tsl listen to %s Err:%s\n", tcpHost, err)
 		}
 	}
 
 	for {
 		conn, err := tcpListener.Accept()
 		if err != nil {
-			log.Fatalf("broker tcp Accept to %s Err:%s\n", tcpHost, err)
+			logger.Fatalf("broker tcp Accept to %s Err:%s\n", tcpHost, err)
 			continue
 		} else {
 			go s.Handler(conn)
 		}
 	}
+}
+
+func (s *Broker) Close() {
+	s.cancel()
 }

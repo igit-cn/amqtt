@@ -3,11 +3,12 @@ package broker
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/eclipse/paho.mqtt.golang/packets"
-	"github.com/werbenhu/amq/clients"
 	"github.com/werbenhu/amq/config"
 	"github.com/werbenhu/amq/ifs"
-	"time"
+	"github.com/werbenhu/amq/logger"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 )
 
 type Processor struct {
-	server ifs.Server
+	server      ifs.Server
 	qos2Msgs    map[uint16]int64
 	maxQos2Msgs int
 }
@@ -78,13 +79,13 @@ func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	brokerSubs := s.server.BrokerTopics().Subscribers(topic)
 	for _, sub := range brokerSubs {
 		if sub != nil {
-			sub.(*clients.Client).WritePacket(packet)
+			sub.(ifs.Client).WritePacket(packet)
 		}
 	}
 
 	if packet.Retain {
 		s.server.ClusterClients().Range(func(key, value interface{}) bool {
-			c := value.(*clients.Client)
+			c := value.(ifs.Client)
 			c.WritePacket(packet)
 			return true
 		})
@@ -92,13 +93,16 @@ func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 		clusterSubs := s.server.ClusterTopics().Subscribers(topic)
 		for _, sub := range clusterSubs {
 			if sub != nil {
-				sub.(*clients.Client).WritePacket(packet)
+				sub.(ifs.Client).WritePacket(packet)
 			}
 		}
 	}
 }
 
-func (s *Processor) ProcessPublish(client *clients.Client, packet *packets.PublishPacket) {
+func (s *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
+}
+
+func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPacket) {
 	topic := packet.TopicName
 	switch packet.Qos {
 	case config.QosAtMostOnce:
@@ -131,15 +135,14 @@ func (s *Processor) ProcessPublish(client *clients.Client, packet *packets.Publi
 
 	if packet.Retain {
 		if len(packet.Payload) > 0 {
-			retain := clients.NewRetain(packet)
-			s.server.BrokerTopics().AddRetain(topic, retain)
+			s.server.BrokerTopics().AddRetain(topic, packet)
 		} else {
 			s.server.BrokerTopics().RemoveRetain(topic)
 		}
 	}
 }
 
-func (s *Processor) ProcessUnSubscribe(client *clients.Client, packet *packets.UnsubscribePacket) {
+func (s *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.UnsubscribePacket) {
 	topics := packet.Topics
 	unsuback := packets.NewControlPacket(packets.Unsuback).(*packets.UnsubackPacket)
 	unsuback.MessageID = packet.MessageID
@@ -150,7 +153,7 @@ func (s *Processor) ProcessUnSubscribe(client *clients.Client, packet *packets.U
 	client.WritePacket(unsuback)
 }
 
-func (s *Processor) ProcessSubscribe(client *clients.Client, packet *packets.SubscribePacket) {
+func (s *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {
 	topics := packet.Topics
 	suback := packets.NewControlPacket(packets.Suback).(*packets.SubackPacket)
 	suback.MessageID = packet.MessageID
@@ -160,17 +163,17 @@ func (s *Processor) ProcessSubscribe(client *clients.Client, packet *packets.Sub
 		s.server.BrokerTopics().Subscribe(topic, client.GetId(), client)
 		retains, _ := s.server.BrokerTopics().SearchRetain(topic)
 		for _, retain := range retains {
-			client.WritePacket(retain.(*clients.Retain).Packet)
+			client.WritePacket(retain.(*packets.PublishPacket))
 		}
 	}
 
-	s.server.ClusterClients().Range(func(k, v interface{}) bool{
-		v.(*clients.Client).WritePacket(packet)
+	s.server.ClusterClients().Range(func(k, v interface{}) bool {
+		v.(ifs.Client).WritePacket(packet)
 		return true
 	})
 }
 
-func (s *Processor) ProcessPing(client *clients.Client) {
+func (s *Processor) ProcessPing(client ifs.Client) {
 	resp := packets.NewControlPacket(packets.Pingresp).(*packets.PingrespPacket)
 	err := client.WritePacket(resp)
 	if err != nil {
@@ -179,13 +182,13 @@ func (s *Processor) ProcessPing(client *clients.Client) {
 	}
 }
 
-func (s *Processor) ProcessDisconnect(client *clients.Client) {
+func (s *Processor) ProcessDisconnect(client ifs.Client) {
+	logger.Debugf("broker ProcessDisconnect clientId:%s\n", client.GetId())
 	client.Close()
 }
 
-func (s *Processor) ProcessPubrel(client *clients.Client, cp packets.ControlPacket) {
+func (s *Processor) ProcessPubrel(client ifs.Client, cp packets.ControlPacket) {
 	packet := cp.(*packets.PubrelPacket)
-	fmt.Printf("ProcessPubrel clientId:%s, MessageID:%d\n", client.GetId(), packet.MessageID)
 	s.checkQos2Msg(packet.MessageID)
 	pubcomp := packets.NewControlPacket(packets.Pubcomp).(*packets.PubcompPacket)
 	pubcomp.MessageID = packet.MessageID
@@ -195,12 +198,12 @@ func (s *Processor) ProcessPubrel(client *clients.Client, cp packets.ControlPack
 	}
 }
 
-func (s *Processor) ProcessConnect(client *clients.Client, cp *packets.ConnectPacket) {
+func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
 	fmt.Printf("clientId:%s\n", clientId)
 
 	if old, ok := s.server.BrokerClients().Load(clientId); ok {
-		oldClient := old.(*clients.Client)
+		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
 
@@ -217,24 +220,22 @@ func (s *Processor) ProcessConnect(client *clients.Client, cp *packets.ConnectPa
 	s.server.BrokerClients().Store(clientId, client)
 }
 
-func (s *Processor) ProcessMessage(client *clients.Client, cp packets.ControlPacket) {
+func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
 	switch packet := cp.(type) {
 	case *packets.PublishPacket:
 		s.ProcessPublish(client, packet)
 	case *packets.PubrelPacket:
-		fmt.Printf("PubrelPacket clientId:%s\n", client.GetId())
 		s.ProcessPubrel(client, packet)
 	case *packets.SubscribePacket:
 		s.ProcessSubscribe(client, packet)
 	case *packets.UnsubscribePacket:
-		fmt.Printf("UnsubscribePacket clientId:%s\n", client.GetId())
 		s.ProcessUnSubscribe(client, packet)
 	case *packets.PingreqPacket:
-		fmt.Printf("PingreqPacket clientId:%s\n", client.GetId())
 		s.ProcessPing(client)
 	case *packets.DisconnectPacket:
-		fmt.Printf("DisconnectPacket clientId:%s\n", client.GetId())
 		s.ProcessDisconnect(client)
+	case *packets.ConnectPacket:
+		s.ProcessConnect(client, packet)
 
 	case *packets.PubcompPacket:
 	case *packets.SubackPacket:
@@ -243,7 +244,6 @@ func (s *Processor) ProcessMessage(client *clients.Client, cp packets.ControlPac
 	case *packets.PubackPacket:
 	case *packets.PubrecPacket:
 	case *packets.ConnackPacket:
-	case *packets.ConnectPacket:
 	default:
 		fmt.Printf("Recv Unknow message")
 	}

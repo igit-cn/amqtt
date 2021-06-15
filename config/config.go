@@ -1,16 +1,17 @@
 package config
 
 import (
+	"flag"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"log"
+	"strings"
+
+	"github.com/BurntSushi/toml"
 )
 
-type Cluster struct {
-	Name string
-	Host string
-	Port int
-	Tsl  bool
+type ClusterNode struct {
+	Name string `json:"name"`
+	Host string `json:"host"`
 }
 
 type Config struct {
@@ -30,7 +31,7 @@ type Config struct {
 	ClusterPort int
 	ClusterTsl  bool
 
-	Clusters []Cluster
+	Clusters []ClusterNode
 }
 
 var cfg Config
@@ -42,8 +43,46 @@ func init() {
 	}
 }
 
-func Clusters() []Cluster {
+func Configure(args []string) error {
+	fs := flag.NewFlagSet("amq", flag.ExitOnError)
+
+	var clusters string
+
+	fs.IntVar(&cfg.TcpPort, "p", 1884, "Tcp port to listen on.")
+	fs.StringVar(&cfg.TcpHost, "host", "0.0.0.0", "Tcp host to listen on.")
+	fs.IntVar(&cfg.ClusterPort, "cp", 1882, "Cluster tcp port to listen on.")
+	fs.StringVar(&cfg.ClusterHost, "ch", "0.0.0.0", "Cluster tcp host to listen on.")
+	fs.StringVar(&clusters, "clusters", "", "Cluster list.")
+
+	fs.StringVar(&cfg.ClusterName, "name", "node01", "Cluster node name.")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if clusters != "" {
+		items := strings.Split(clusters, ",")
+		cfg.Clusters = []ClusterNode{}
+		for _, cluster := range items {
+			parts := strings.Split(cluster, "//")
+			if len(parts) != 2 {
+				log.Fatalf("read conf.toml clusters param error\n")
+			}
+			cfg.Clusters = append(cfg.Clusters, ClusterNode{
+				Name: parts[0],
+				Host: parts[1],
+			})
+		}
+	}
+	return nil
+}
+
+func Clusters() []ClusterNode {
 	return cfg.Clusters
+}
+
+func ClusterName() string {
+	return cfg.ClusterName
 }
 
 func ClusterHost() string {
