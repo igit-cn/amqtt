@@ -28,7 +28,7 @@ func NewCluster(server ifs.Server) *Cluster {
 }
 
 func (s *Cluster) HandlerServer(conn net.Conn) {
-	client := NewClient(conn, s.server.ClusterTopics(), TYP_SERVER)
+	client := NewClient(conn, s.server.ClusterTopics(), config.TypServer)
 	packet, err := client.ReadPacket()
 	if err != nil {
 		logger.Error("read connect packet error: ", err)
@@ -86,7 +86,7 @@ func (s *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 	connect.ClientIdentifier = config.ClusterName()
 	connect.Keepalive = 60
 
-	client := NewClient(conn, s.server.ClusterTopics(), TYP_CLIENT)
+	client := NewClient(conn, s.server.ClusterTopics(), config.TypClient)
 	client.SetId(cluster.Name)
 	err := client.WritePacket(connect)
 	if err != nil {
@@ -94,13 +94,13 @@ func (s *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 		return
 	}
 
-	if old, ok := s.server.ClusterClients().Load(cluster.Name); ok {
+	if old, ok := s.server.Clients().Load(cluster.Name); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
 	logger.Debugf("cluster ProcessConnack clientId:%s", client.GetId())
 	client.SetId(cluster.Name)
-	s.server.ClusterClients().Store(cluster.Name, client)
+	s.server.Clusters().Store(cluster.Name, client)
 
 	client.ReadLoop(s.processor)
 }
@@ -119,12 +119,12 @@ func (s *Cluster) StartClient(cluster *config.ClusterNode) {
 func (s *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
-		exist, ok := s.server.ClusterClients().Load(clientId)
+		exist, ok := s.server.Clients().Load(clientId)
 		logger.Debugf("CheckHealthy clientId:%s, ok:%t", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
 			go s.StartClient(&cluster)
-		} else if exist.(*Client).GetTyp() == TYP_CLIENT {
+		} else if exist.(*Client).GetTyp() == config.TypClient {
 			logger.Debugf("CheckHealthy write PingreqPacket conn:%+v", exist)
 			ping := packets.NewControlPacket(packets.Pingreq).(*packets.PingreqPacket)
 			exist.(*Client).WritePacket(ping)

@@ -2,7 +2,6 @@ package broker
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
@@ -32,7 +31,6 @@ func (s *Processor) checkQos2Msg(messageId uint16) error {
 	if _, found := s.qos2Msgs[messageId]; found {
 		delete(s.qos2Msgs, messageId)
 	} else {
-		fmt.Printf("Dropped qos2 packet for too many awaiting_rel messageId:%d\n", messageId)
 		return errors.New("RC_PACKET_IDENTIFIER_NOT_FOUND")
 	}
 	return nil
@@ -40,7 +38,6 @@ func (s *Processor) checkQos2Msg(messageId uint16) error {
 
 func (s *Processor) saveQos2Msg(messageId uint16) error {
 	if s.isQos2MsgFull() {
-		fmt.Printf("Dropped qos2 packet for too many awaiting_rel")
 		return errors.New("DROPPED_QOS2_PACKET_FOR_TOO_MANY_AWAITING_REL")
 	}
 
@@ -59,7 +56,6 @@ func (s *Processor) expireQos2Msg() {
 	now := time.Now().Unix()
 	for messageId, ts := range s.qos2Msgs {
 		if now-ts >= Qos2Timeout {
-			fmt.Printf("Dropped qos2 packet for await_rel_timeout messageId:%d\n", messageId)
 			delete(s.qos2Msgs, messageId)
 		}
 	}
@@ -84,7 +80,7 @@ func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	}
 
 	if packet.Retain {
-		s.server.ClusterClients().Range(func(key, value interface{}) bool {
+		s.server.Clients().Range(func(key, value interface{}) bool {
 			c := value.(ifs.Client)
 			c.WritePacket(packet)
 			return true
@@ -112,7 +108,7 @@ func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPac
 		puback := packets.NewControlPacket(packets.Puback).(*packets.PubackPacket)
 		puback.MessageID = packet.MessageID
 		if err := client.WritePacket(puback); err != nil {
-			fmt.Printf("send puback error: %s\n", err)
+			logger.Errorf("send puback error: %s\n", err)
 			return
 		}
 		s.DoPublish(topic, packet)
@@ -124,12 +120,12 @@ func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPac
 		pubrec := packets.NewControlPacket(packets.Pubrec).(*packets.PubrecPacket)
 		pubrec.MessageID = packet.MessageID
 		if err := client.WritePacket(pubrec); err != nil {
-			fmt.Printf("send pubrec error: %s\n", err)
+			logger.Errorf("send pubrec error: %s\n", err)
 			return
 		}
 		s.DoPublish(topic, packet)
 	default:
-		fmt.Printf("publish with unknown qos")
+		logger.Error("publish with unknown qos")
 		return
 	}
 
@@ -167,7 +163,7 @@ func (s *Processor) ProcessSubscribe(client ifs.Client, packet *packets.Subscrib
 		}
 	}
 
-	s.server.ClusterClients().Range(func(k, v interface{}) bool {
+	s.server.Clusters().Range(func(k, v interface{}) bool {
 		v.(ifs.Client).WritePacket(packet)
 		return true
 	})
@@ -177,7 +173,6 @@ func (s *Processor) ProcessPing(client ifs.Client) {
 	resp := packets.NewControlPacket(packets.Pingresp).(*packets.PingrespPacket)
 	err := client.WritePacket(resp)
 	if err != nil {
-		fmt.Printf("send PingResponse error: %s\n", err)
 		return
 	}
 }
@@ -193,16 +188,16 @@ func (s *Processor) ProcessPubrel(client ifs.Client, cp packets.ControlPacket) {
 	pubcomp := packets.NewControlPacket(packets.Pubcomp).(*packets.PubcompPacket)
 	pubcomp.MessageID = packet.MessageID
 	if err := client.WritePacket(pubcomp); err != nil {
-		fmt.Printf("send pubcomp error: %s\n", err)
+		logger.Debugf("send pubcomp error: %s\n", err)
 		return
 	}
 }
 
 func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
-	fmt.Printf("clientId:%s\n", clientId)
+	logger.Debugf("ProcessConnect clientId:%s\n", clientId)
 
-	if old, ok := s.server.BrokerClients().Load(clientId); ok {
+	if old, ok := s.server.Clients().Load(clientId); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
@@ -213,11 +208,13 @@ func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 
 	err := client.WritePacket(connack)
 	if err != nil {
-		fmt.Println("send connack error, ", err)
+		logger.Error("send connack error, ", err)
 		return
 	}
+	logger.Debug("send connack success")
+
 	client.SetId(clientId)
-	s.server.BrokerClients().Store(clientId, client)
+	s.server.Clients().Store(clientId, client)
 }
 
 func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
@@ -245,6 +242,6 @@ func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) 
 	case *packets.PubrecPacket:
 	case *packets.ConnackPacket:
 	default:
-		fmt.Printf("Recv Unknow message")
+		logger.Error("Recv Unknow message")
 	}
 }

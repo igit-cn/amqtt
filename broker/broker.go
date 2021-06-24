@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"net/http"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
 	"github.com/werbenhu/amq/config"
 	"github.com/werbenhu/amq/ifs"
 	"github.com/werbenhu/amq/logger"
+	"golang.org/x/net/websocket"
 )
 
 type Broker struct {
@@ -26,23 +28,43 @@ func NewBroker(server ifs.Server) *Broker {
 	return s
 }
 
-func (s *Broker) Handler(conn net.Conn) {
-	client := NewClient(conn, s.server.BrokerTopics())
+func (s *Broker) Handler(conn net.Conn, typ int) {
+	client := NewClient(conn, s.server.BrokerTopics(), typ)
 	packet, err := client.ReadPacket()
 	if err != nil {
 		logger.Error("read connect packet error: ", err)
+		client.Close()
 		return
 	}
 	cp, ok := packet.(*packets.ConnectPacket)
 	if !ok {
 		logger.Error("received msg that was not connect")
+		client.Close()
 		return
 	}
+
 	s.processor.ProcessConnect(client, cp)
 	client.ReadLoop(s.processor)
 }
 
-func (s *Broker) Start() {
+func (s *Broker) StartWebsocket() {
+	http.Handle("/"+config.WsPath(), websocket.Handler(func(conn *websocket.Conn) {
+		conn.PayloadType = websocket.BinaryFrame
+		s.Handler(conn, config.TypWs)
+	}))
+	var err error
+	if config.IsWsTsl() {
+		err = http.ListenAndServeTLS(config.WsHost(), config.CaFile(), config.CeKey(), nil)
+	} else {
+		err = http.ListenAndServe(config.WsHost(), nil)
+	}
+	logger.Debug("StartWebsocket end")
+	if err != nil {
+		panic("StartWebsocket ERROR: " + err.Error())
+	}
+}
+
+func (s *Broker) StartTcp() {
 	tcpHost := config.TcpHost()
 	var tcpListener net.Listener
 	var err error
@@ -71,7 +93,7 @@ func (s *Broker) Start() {
 			logger.Fatalf("broker tcp Accept to %s Err:%s\n", tcpHost, err)
 			continue
 		} else {
-			go s.Handler(conn)
+			go s.Handler(conn, config.TypTcp)
 		}
 	}
 }

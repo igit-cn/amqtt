@@ -9,6 +9,6 @@ type Server interface {
 	Context() context.Context
 	BrokerTopics() Topic
 	ClusterTopics() Topic
-	BrokerClients() *sync.Map
-	ClusterClients() *sync.Map
+	Clients() *sync.Map
+	Clusters() *sync.Map
 }

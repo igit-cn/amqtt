@@ -1,7 +1,6 @@
 package trie
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 )
@@ -103,7 +102,6 @@ func (t *Trie) AddRetain(topic string, packet interface{}) error {
 func (t *Trie) RemoveRetain(topic string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	fmt.Printf("RemoveRetain topic:%s\n", topic)
 	keys := strings.Split(topic, "/")
 	index := 0
 	if strings.TrimSpace(keys[0]) == "" {
@@ -115,7 +113,7 @@ func (t *Trie) RemoveRetain(topic string) error {
 	return nil
 }
 
-func (t *Trie) SearchRetain(topic string)([]interface{}, error) {
+func (t *Trie) SearchRetain(topic string) ([]interface{}, error) {
 	retains := make([]interface{}, 0)
 	t.mu.RLock()
 	defer t.mu.RUnlock()

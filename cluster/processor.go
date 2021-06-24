@@ -73,7 +73,7 @@ func (s *Processor) ProcessPing(client ifs.Client) {
 
 func (s *Processor) ProcessDisconnect(client ifs.Client) {
 	logger.Debugf("cluster ProcessDisconnect clientId:%s", client.GetId())
-	s.server.ClusterClients().Delete(client.GetId())
+	s.server.Clusters().Delete(client.GetId())
 	client.Close()
 }
 
@@ -83,7 +83,7 @@ func (s *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket)
 
 func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
-	if old, ok := s.server.ClusterClients().Load(clientId); ok {
+	if old, ok := s.server.Clusters().Load(clientId); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
@@ -99,7 +99,7 @@ func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 	}
 	logger.Debugf("cluster ProcessConnect clientId:%s", client.GetId())
 	client.SetId(clientId)
-	s.server.ClusterClients().Store(clientId, client)
+	s.server.Clusters().Store(clientId, client)
 }
 
 func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {

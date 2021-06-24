@@ -41,6 +41,9 @@ func (b *Branch) AddBranch(topic string, identity string, subscriber interface{}
 
 	if branch.Name == "#" {
 		branch.AddLeaf(topic, identity, subscriber)
+		if branch.Parent != nil {
+			branch.Parent.AddLeaf(topic, identity, subscriber)
+		}
 	} else if index+1 < len(keys) {
 		branch.AddBranch(topic, identity, subscriber, keys, index+1)
 	} else {

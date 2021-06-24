@@ -10,11 +10,6 @@ import (
 	"github.com/werbenhu/amq/logger"
 )
 
-const (
-	TYP_CLIENT = iota
-	TYP_SERVER
-)
-
 type Client struct {
 	id         string
 	conn       net.Conn

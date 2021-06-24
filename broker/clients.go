@@ -19,10 +19,11 @@ type Client struct {
 	typ        int
 }
 
-func NewClient(conn net.Conn, topics ifs.Topic) ifs.Client {
+func NewClient(conn net.Conn, topics ifs.Topic, typ int) ifs.Client {
 	c := new(Client)
 	c.conn = conn
 	c.topics = topics
+	c.typ = typ
 	c.ctx, c.cancelFunc = context.WithCancel(context.Background())
 	return c
 }
@@ -40,6 +41,7 @@ func (c *Client) ReadLoop(processor ifs.Processor) {
 				processor.ProcessMessage(c, packet)
 				return
 			}
+			logger.Debug("ReadLoop success")
 			processor.ProcessMessage(c, packet)
 		}
 	}
@@ -77,10 +79,12 @@ func (c *Client) GetTyp() int {
 }
 
 func (c *Client) ReadPacket() (packets.ControlPacket, error) {
+	logger.Debug("ReadPacket conn:", c.conn)
 	return packets.ReadPacket(c.conn)
 }
 
 func (c *Client) WritePacket(packet packets.ControlPacket) error {
+	logger.Debug("WritePacket conn:", c.conn)
 	err := packet.Write(c.conn)
 	return err
 }

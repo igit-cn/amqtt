@@ -21,6 +21,7 @@ type Config struct {
 
 	WsHost string
 	WsPort int
+	WsPath string
 	WsTsl  bool
 
 	CaFile string
@@ -102,6 +103,10 @@ func WsHost() string {
 
 func CaFile() string {
 	return cfg.CaFile
+}
+
+func WsPath() string {
+	return cfg.WsPath
 }
 
 func CeKey() string {
