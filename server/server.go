@@ -6,6 +6,7 @@ import (
 
 	"github.com/werbenhu/amq/broker"
 	"github.com/werbenhu/amq/cluster"
+	"github.com/werbenhu/amq/config"
 	"github.com/werbenhu/amq/ifs"
 	"github.com/werbenhu/amq/logger"
 	"github.com/werbenhu/amq/trie"
@@ -37,7 +38,10 @@ func NewServer(ctx context.Context) *Server {
 func (s *Server) Start() {
 	go s.b.StartTcp()
 	go s.b.StartWebsocket()
-	go s.c.Start()
+
+	if config.IsCluster() {
+		go s.c.Start()
+	}
 
 	select {
 	case <-s.ctx.Done():

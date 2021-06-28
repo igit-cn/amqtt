@@ -1,27 +1,39 @@
 package trie
 
 type Leaf struct {
-	Subscribers map[string]interface{}
-	Retain  interface{}
-	Parent  *Branch
+	subscribers map[string]interface{}
+	retain      interface{}
+	parent      *Branch
 }
 
 func NewLeaf(parent *Branch) *Leaf {
 	leaf := new(Leaf)
-	leaf.Retain = nil
-	leaf.Parent = parent
-	leaf.Subscribers = make(map[string]interface{})
+	leaf.retain = nil
+	leaf.parent = parent
+	leaf.subscribers = make(map[string]interface{})
 	return leaf
 }
 
+func (l *Leaf) GetRetain() interface{} {
+	return l.retain
+}
+
 func (l *Leaf) SetRetain(retain interface{}) {
-	l.Retain = retain
+	l.retain = retain
 }
 
 func (l *Leaf) RemoveRetain() {
-	l.Retain = nil
+	l.retain = nil
+}
+
+func (l *Leaf) AddSubscriber(identity string, subscriber interface{}) {
+	l.subscribers[identity] = subscriber
 }
 
 func (l *Leaf) RemoveSubscriber(identity string) {
-	delete(l.Subscribers, identity)
+	delete(l.subscribers, identity)
+}
+
+func (l *Leaf) Subscribers() map[string]interface{} {
+	return l.subscribers
 }

@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
@@ -17,6 +18,7 @@ type Client struct {
 	subscribes []string
 	topics     ifs.Topic
 	typ        int
+	will       *packets.PublishPacket
 }
 
 func NewClient(conn net.Conn, topics ifs.Topic, typ int) ifs.Client {
@@ -37,6 +39,7 @@ func (c *Client) ReadLoop(processor ifs.Processor) {
 			packet, err := c.ReadPacket()
 			if err != nil {
 				logger.Debugf("Client ReadLoop read packet error: %+v\n", err)
+				processor.ProcessMessage(c, c.will)
 				packet := packets.NewControlPacket(packets.Disconnect).(*packets.DisconnectPacket)
 				processor.ProcessMessage(c, packet)
 				return
@@ -45,6 +48,10 @@ func (c *Client) ReadLoop(processor ifs.Processor) {
 			processor.ProcessMessage(c, packet)
 		}
 	}
+}
+
+func (c *Client) SetWill(will *packets.PublishPacket) {
+	c.will = will
 }
 
 func (c *Client) SetId(id string) ifs.Client {
@@ -79,14 +86,23 @@ func (c *Client) GetTyp() int {
 }
 
 func (c *Client) ReadPacket() (packets.ControlPacket, error) {
-	logger.Debug("ReadPacket conn:", c.conn)
-	return packets.ReadPacket(c.conn)
+	if c.conn != nil {
+		packet, err := packets.ReadPacket(c.conn)
+		if err == nil {
+			logger.Debugf("ReadPacket id:%s, packet:%s", c.id, packet.String())
+		}
+		return packet, err
+	}
+	return nil, errors.New("conn is disconnected")
 }
 
 func (c *Client) WritePacket(packet packets.ControlPacket) error {
-	logger.Debug("WritePacket conn:", c.conn)
-	err := packet.Write(c.conn)
-	return err
+	if c.conn != nil {
+		logger.Debugf("WritePacket id:%s, packet:%s", c.id, packet.String())
+		err := packet.Write(c.conn)
+		return err
+	}
+	return nil
 }
 
 func (c *Client) ClearSubscribes() error {

@@ -72,30 +72,21 @@ func (s *Processor) isQos2MsgFull() bool {
 }
 
 func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
+	logger.Debugf("DoPublish topic:%s, packet:%+v", topic, packet)
 	brokerSubs := s.server.BrokerTopics().Subscribers(topic)
 	for _, sub := range brokerSubs {
 		if sub != nil {
+			logger.Debugf("DoPublish sub c:%s", sub.(ifs.Client).GetId())
 			sub.(ifs.Client).WritePacket(packet)
 		}
 	}
 
-	if packet.Retain {
-		s.server.Clients().Range(func(key, value interface{}) bool {
-			c := value.(ifs.Client)
-			c.WritePacket(packet)
-			return true
-		})
-	} else {
-		clusterSubs := s.server.ClusterTopics().Subscribers(topic)
-		for _, sub := range clusterSubs {
-			if sub != nil {
-				sub.(ifs.Client).WritePacket(packet)
-			}
+	clusterSubs := s.server.ClusterTopics().Subscribers(topic)
+	for _, sub := range clusterSubs {
+		if sub != nil {
+			sub.(ifs.Client).WritePacket(packet)
 		}
 	}
-}
-
-func (s *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
 }
 
 func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPacket) {
@@ -193,10 +184,11 @@ func (s *Processor) ProcessPubrel(client ifs.Client, cp packets.ControlPacket) {
 	}
 }
 
+func (s *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
+}
+
 func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
-	logger.Debugf("ProcessConnect clientId:%s\n", clientId)
-
 	if old, ok := s.server.Clients().Load(clientId); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
@@ -211,10 +203,19 @@ func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 		logger.Error("send connack error, ", err)
 		return
 	}
-	logger.Debug("send connack success")
 
 	client.SetId(clientId)
 	s.server.Clients().Store(clientId, client)
+
+	if cp.WillFlag {
+		will := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
+		will.Retain = cp.WillRetain
+		will.Payload = cp.WillMessage
+		will.TopicName = cp.WillTopic
+		will.Qos = cp.WillQos
+		will.Dup = cp.Dup
+		client.(*Client).SetWill(will)
+	}
 }
 
 func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {

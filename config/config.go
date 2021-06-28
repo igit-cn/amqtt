@@ -27,6 +27,7 @@ type Config struct {
 	CaFile string
 	CeKey  string
 
+	IsCluster   bool
 	ClusterName string
 	ClusterHost string
 	ClusterPort int
@@ -99,6 +100,10 @@ func TcpHost() string {
 
 func WsHost() string {
 	return fmt.Sprintf("%s:%d", cfg.WsHost, cfg.WsPort)
+}
+
+func IsCluster() bool {
+	return cfg.IsCluster
 }
 
 func CaFile() string {
