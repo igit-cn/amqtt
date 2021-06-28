@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/werbenhu/amq/config"
-	"github.com/werbenhu/amq/logger"
-	"github.com/werbenhu/amq/server"
+	"github.com/werbenhu/amqtt/config"
+	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/server"
 )
 
 func main() {

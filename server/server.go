@@ -4,12 +4,12 @@ import (
 	"context"
 	"sync"
 
-	"github.com/werbenhu/amq/broker"
-	"github.com/werbenhu/amq/cluster"
-	"github.com/werbenhu/amq/config"
-	"github.com/werbenhu/amq/ifs"
-	"github.com/werbenhu/amq/logger"
-	"github.com/werbenhu/amq/trie"
+	"github.com/werbenhu/amqtt/broker"
+	"github.com/werbenhu/amqtt/cluster"
+	"github.com/werbenhu/amqtt/config"
+	"github.com/werbenhu/amqtt/ifs"
+	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/trie"
 )
 
 type Server struct {

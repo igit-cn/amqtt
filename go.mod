@@ -1,4 +1,4 @@
-module github.com/werbenhu/amq
+module github.com/werbenhu/amqtt
 
 go 1.14
 

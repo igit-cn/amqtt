@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/eclipse/paho.mqtt.golang/packets"
-	"github.com/werbenhu/amq/config"
-	"github.com/werbenhu/amq/ifs"
-	"github.com/werbenhu/amq/logger"
+	"github.com/werbenhu/amqtt/config"
+	"github.com/werbenhu/amqtt/ifs"
+	"github.com/werbenhu/amqtt/logger"
 )
 
 const (

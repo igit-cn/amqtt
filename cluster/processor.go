@@ -2,8 +2,8 @@ package cluster
 
 import (
 	"github.com/eclipse/paho.mqtt.golang/packets"
-	"github.com/werbenhu/amq/ifs"
-	"github.com/werbenhu/amq/logger"
+	"github.com/werbenhu/amqtt/ifs"
+	"github.com/werbenhu/amqtt/logger"
 )
 
 type Processor struct {
