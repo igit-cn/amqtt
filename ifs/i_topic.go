@@ -1,6 +1,6 @@
 package ifs
 
-type Topic interface {
+type TopicStorage interface {
 	Subscribe(topic string, identity string, subscriber interface{}) (exist bool)
 	Unsubscribe(topic string, identity string) (exist bool)
 	Subscribers(topic string) []interface{}

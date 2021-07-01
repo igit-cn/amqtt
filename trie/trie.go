@@ -39,9 +39,9 @@ func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) 
 }
 
 func (t *Trie) Unsubscribe(topic string, identity string) (exist bool) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if strings.Contains(topic, "#") || strings.Contains(topic, "+") {
+		t.mu.Lock()
+		defer t.mu.Unlock()
 		keys := strings.Split(topic, "/")
 		index := 0
 		if strings.TrimSpace(keys[0]) == "" {

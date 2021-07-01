@@ -43,7 +43,6 @@ func (c *Client) ReadLoop(processor ifs.Processor) {
 				processor.ProcessMessage(c, packet)
 				return
 			}
-			logger.Debug("ReadLoop success")
 			processor.ProcessMessage(c, packet)
 		}
 	}
@@ -78,17 +77,13 @@ func (c *Client) GetTyp() int {
 func (c *Client) ReadPacket() (packets.ControlPacket, error) {
 	if c.conn != nil {
 		packet, err := packets.ReadPacket(c.conn)
-		if err == nil {
-			logger.Debugf("ReadPacket id:%s, packet:%s", c.id, packet.String())
-		}
 		return packet, err
 	}
-	return nil, errors.New("conn is disconnected")
+	return nil, errors.New("CONN IS DISCONNECTED")
 }
 
 func (c *Client) WritePacket(packet packets.ControlPacket) error {
 	if c.conn != nil {
-		// logger.Debugf("WritePacket id:%s, packet:%s", c.id, packet.String())
 		err := packet.Write(c.conn)
 		return err
 	}
@@ -109,7 +104,7 @@ func (c *Client) AddTopic(topic string, data interface{}) (exist bool) {
 
 func (c *Client) RemoveTopic(topic string) error {
 	if _, ok := c.topics[topic]; !ok {
-		return errors.New("topic not exist")
+		return errors.New("TOPIC NOT EXIST")
 	}
 	delete(c.topics, topic)
 	return nil

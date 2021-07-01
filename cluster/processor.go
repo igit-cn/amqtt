@@ -93,6 +93,7 @@ func (p *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket)
 func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
 	if old, ok := p.s.Clusters().Load(clientId); ok {
+		logger.Debugf("cluster ProcessConnect close old clientId:%s", client.GetId())
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}

@@ -84,9 +84,10 @@ func NewState(version string) *ServerState {
 
 type Server interface {
 	Context() context.Context
-	BrokerTopics() Topic
-	ClusterTopics() Topic
+	BrokerTopics() TopicStorage
+	ClusterTopics() TopicStorage
 	Clients() *sync.Map
 	Clusters() *sync.Map
 	State() *ServerState
+	Close()
 }

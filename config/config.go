@@ -15,18 +15,16 @@ type ClusterNode struct {
 }
 
 type Config struct {
-	TcpHost string
-	TcpPort int
-	TcpTsl  bool
-
-	WsHost string
-	WsPort int
-	WsPath string
-	WsTsl  bool
-
-	CaFile string
-	CeKey  string
-
+	TcpHost     string
+	TcpPort     int
+	TcpTsl      bool
+	Websocket   bool
+	WsHost      string
+	WsPort      int
+	WsPath      string
+	WsTsl       bool
+	CaFile      string
+	CeKey       string
 	IsCluster   bool
 	ClusterName string
 	ClusterHost string
@@ -46,17 +44,15 @@ func init() {
 }
 
 func Configure(args []string) error {
-	fs := flag.NewFlagSet("amq", flag.ExitOnError)
+	fs := flag.NewFlagSet("amqtt", flag.ExitOnError)
 
-	var clusters string
-
-	fs.IntVar(&cfg.TcpPort, "p", 1884, "Tcp port to listen on.")
-	fs.StringVar(&cfg.TcpHost, "host", "0.0.0.0", "Tcp host to listen on.")
-	fs.IntVar(&cfg.ClusterPort, "cp", 1882, "Cluster tcp port to listen on.")
-	fs.StringVar(&cfg.ClusterHost, "ch", "0.0.0.0", "Cluster tcp host to listen on.")
-	fs.StringVar(&clusters, "clusters", "", "Cluster list.")
-
-	fs.StringVar(&cfg.ClusterName, "name", "node01", "Cluster node name.")
+	fs.IntVar(&cfg.TcpPort, "p", cfg.TcpPort, "broker tcp port to listen on.")
+	fs.StringVar(&cfg.TcpHost, "host", cfg.TcpHost, "broker tcp host to listen on.")
+	fs.IntVar(&cfg.ClusterPort, "cp", cfg.ClusterPort, "cluster tcp port to listen on.")
+	fs.StringVar(&cfg.ClusterHost, "ch", cfg.ClusterHost, "cluster tcp host to listen on.")
+	clusters := *fs.String("clusters", "", "other node of this cluster. e.g., \"node2//host:port,node3//host:port\"")
+	fs.BoolVar(&cfg.Websocket, "ws", cfg.Websocket, "whether to open websocket")
+	fs.StringVar(&cfg.ClusterName, "name", cfg.ClusterName, "cluster node name.")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -76,6 +72,7 @@ func Configure(args []string) error {
 			})
 		}
 	}
+
 	return nil
 }
 
@@ -96,6 +93,10 @@ func ClusterHost() string {
 
 func TcpHost() string {
 	return fmt.Sprintf("%s:%d", cfg.TcpHost, cfg.TcpPort)
+}
+
+func IsWebsocket() bool {
+	return cfg.Websocket
 }
 
 func WsHost() string {
@@ -124,4 +125,8 @@ func IsTcpTsl() bool {
 
 func IsWsTsl() bool {
 	return cfg.WsTsl
+}
+
+func IsClusterTsl() bool {
+	return cfg.ClusterTsl
 }

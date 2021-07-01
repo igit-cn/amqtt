@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -50,11 +51,12 @@ func (c *Cluster) StartServer() {
 	var tcpListener net.Listener
 	var err error
 
-	if !config.IsTcpTsl() {
+	if !config.IsClusterTsl() {
 		tcpListener, err = net.Listen("tcp", tcpHost)
 		if err != nil {
 			logger.Fatalf("tcp listen to %s Err:%s", tcpHost, err)
 		}
+		fmt.Printf("start cluster tcp listen to %s ...\n", tcpHost)
 	} else {
 		cert, err := tls.LoadX509KeyPair(config.CaFile(), config.CeKey())
 		if err != nil {
@@ -66,6 +68,7 @@ func (c *Cluster) StartServer() {
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s", tcpHost, err)
 		}
+		fmt.Printf("start cluster tcp listen to %s and tls is on ...\n", tcpHost)
 	}
 
 	for {
@@ -95,11 +98,11 @@ func (c *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 		return
 	}
 
-	if old, ok := c.s.Clients().Load(cluster.Name); ok {
+	if old, ok := c.s.Clusters().Load(cluster.Name); ok {
+		logger.Debugf("cluster HandlerClient close clientId:%s", client.GetId())
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
-	logger.Debugf("cluster ProcessConnack clientId:%s", client.GetId())
 	client.SetId(cluster.Name)
 	c.s.Clusters().Store(cluster.Name, client)
 
@@ -120,7 +123,7 @@ func (s *Cluster) StartClient(cluster *config.ClusterNode) {
 func (c *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
-		exist, ok := c.s.Clients().Load(clientId)
+		exist, ok := c.s.Clusters().Load(clientId)
 		logger.Debugf("CheckHealthy clientId:%s, ok:%t", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
@@ -134,7 +137,7 @@ func (c *Cluster) CheckHealthy() {
 }
 
 func (c *Cluster) HeartBeat() {
-	tick := time.NewTicker(10 * time.Second)
+	tick := time.NewTicker(20 * time.Second)
 	for {
 		select {
 		case <-c.ctx.Done():

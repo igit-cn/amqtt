@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -61,8 +62,10 @@ func (b *Broker) StartWebsocket() {
 	}))
 	var err error
 	if config.IsWsTsl() {
+		fmt.Printf("start broker websocket listen to %s and tls is on ...\n", config.WsHost())
 		err = http.ListenAndServeTLS(config.WsHost(), config.CaFile(), config.CeKey(), nil)
 	} else {
+		fmt.Printf("start broker websocket listen to %s ...\n", config.WsHost())
 		err = http.ListenAndServe(config.WsHost(), nil)
 	}
 	logger.Debug("StartWebsocket end")
@@ -132,6 +135,7 @@ func (b *Broker) StartTcp() {
 		if err != nil {
 			logger.Fatalf("tcp listen to %s Err:%s\n", tcpHost, err)
 		}
+		fmt.Printf("start broker tcp listen to %s ...\n", tcpHost)
 	} else {
 		cert, err := tls.LoadX509KeyPair(config.CaFile(), config.CeKey())
 		if err != nil {
@@ -143,6 +147,7 @@ func (b *Broker) StartTcp() {
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s\n", tcpHost, err)
 		}
+		fmt.Printf("start broker tcp listen to %s and tls is on ...\n", tcpHost)
 	}
 
 	for {

@@ -2,18 +2,19 @@ tcpHost = "0.0.0.0"
 tcpPort = 1884
 tcpTsl = true
 
+websocket = true
 wsHost = "0.0.0.0"
-wsPort = 8085
+wsPort = 8086
 wsTsl = false
 wsPath = "mqtt"
 
 caFile = "certs/server.crt"
 ceKey = "certs/server.key"
 
-isCluster = false
+isCluster = true
 clusterName = "node1"
 clusterHost = "0.0.0.0"
-clusterPort = 1882
+clusterPort = 2884
 clusterTsl = false
 
 [[clusters]]

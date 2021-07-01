@@ -15,8 +15,8 @@ import (
 type Server struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
-	brokerTopics  ifs.Topic
-	clusterTopics ifs.Topic
+	brokerTopics  ifs.TopicStorage
+	clusterTopics ifs.TopicStorage
 	clients       *sync.Map
 	clusters      *sync.Map
 	b             *broker.Broker
@@ -39,28 +39,32 @@ func NewServer(ctx context.Context) *Server {
 
 func (s *Server) Start() {
 	go s.b.StartTcp()
-	go s.b.StartWebsocket()
+
+	if config.IsWebsocket() {
+		go s.b.StartWebsocket()
+	}
 
 	if config.IsCluster() {
 		go s.c.Start()
 	}
 
-	select {
-	case <-s.ctx.Done():
-		logger.Debugf("server done")
-		return
-	}
+	<-s.ctx.Done()
+	logger.Debugf("server done")
+}
+
+func (s *Server) Close() {
+	s.cancel()
 }
 
 func (s *Server) Context() context.Context {
 	return s.ctx
 }
 
-func (s *Server) BrokerTopics() ifs.Topic {
+func (s *Server) BrokerTopics() ifs.TopicStorage {
 	return s.brokerTopics
 }
 
-func (s *Server) ClusterTopics() ifs.Topic {
+func (s *Server) ClusterTopics() ifs.TopicStorage {
 	return s.clusterTopics
 }
 
