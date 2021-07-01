@@ -73,12 +73,12 @@ func (p *Processor) isQos2MsgFull() bool {
 }
 
 func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
-	logger.Debugf("DoPublish topic:%s, packet:%+v", topic, packet)
+	// logger.Debugf("DoPublish topic:%s, packet:%+v", topic, packet)
 	brokerSubs := p.s.BrokerTopics().Subscribers(topic)
 	atomic.AddInt64(&p.s.State().PubRecv, 1)
 	for _, sub := range brokerSubs {
 		if sub != nil {
-			logger.Debugf("DoPublish sub c:%s", sub.(ifs.Client).GetId())
+			// logger.Debugf("DoPublish sub c:%s", sub.(ifs.Client).GetId())
 			atomic.AddInt64(&p.s.State().PubSent, 1)
 			p.WritePacket(sub.(ifs.Client), packet)
 		}
@@ -159,7 +159,6 @@ func (p *Processor) ProcessSubscribe(client ifs.Client, packet *packets.Subscrib
 	suback.MessageID = packet.MessageID
 	p.WritePacket(client, suback)
 
-	logger.Errorf("ProcessSubscribe topics: %+v\n", topics)
 	for _, topic := range topics {
 		client.AddTopic(topic, client.GetId())
 		if !p.s.BrokerTopics().Subscribe(topic, client.GetId(), client) {
@@ -261,7 +260,7 @@ func (p *Processor) WritePacket(client ifs.Client, packet packets.ControlPacket)
 		logger.Error("write packet error, ", err)
 		return err
 	}
-	logger.Debugf("Processor writePacket size:%d", packet.Size())
+	// logger.Debugf("Processor writePacket size:%d", packet.Size())
 	atomic.AddInt64(&p.s.State().MsgSent, 1)
 	atomic.AddInt64(&p.s.State().BytesSent, int64(packet.Size()))
 	return nil

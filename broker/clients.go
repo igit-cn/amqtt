@@ -38,7 +38,9 @@ func (c *Client) ReadLoop(processor ifs.Processor) {
 			packet, err := c.ReadPacket()
 			if err != nil {
 				logger.Debugf("Client ReadLoop read packet error: %+v\n", err)
-				processor.ProcessMessage(c, c.will)
+				if c.will != nil {
+					processor.ProcessMessage(c, c.will)
+				}
 				packet := packets.NewControlPacket(packets.Disconnect).(*packets.DisconnectPacket)
 				processor.ProcessMessage(c, packet)
 				return

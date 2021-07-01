@@ -71,9 +71,6 @@ func (c *Client) GetTyp() int {
 func (c *Client) ReadPacket() (packets.ControlPacket, error) {
 	if c.conn != nil {
 		packet, err := packets.ReadPacket(c.conn)
-		if err == nil {
-			logger.Debugf("ReadPacket id:%s, packet:%s", c.id, packet.String())
-		}
 		return packet, err
 	}
 	return nil, errors.New("conn is disconnected")

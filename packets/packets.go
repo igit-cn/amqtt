@@ -139,7 +139,7 @@ func ReadPacket(r io.Reader) (ControlPacket, error) {
 	}
 
 	fh.PacketSize += fh.RemainingLength
-	fmt.Printf("ReadPacket size:%d\n", fh.PacketSize)
+	// fmt.Printf("ReadPacket size:%d\n", fh.PacketSize)
 	err = cp.Unpack(bytes.NewBuffer(packetBytes))
 	return cp, err
 }
@@ -262,7 +262,7 @@ func (fh *FixedHeader) pack() bytes.Buffer {
 	header.Write(lenBytes)
 
 	fh.PacketSize = 1 + len(lenBytes) + fh.RemainingLength
-	fmt.Printf("FixedHeader pack len:%d, PacketSize:%d\n", len(lenBytes), fh.PacketSize)
+	// fmt.Printf("FixedHeader pack len:%d, PacketSize:%d\n", len(lenBytes), fh.PacketSize)
 	return header
 }
 
