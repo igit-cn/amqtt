@@ -5,31 +5,38 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"strconv"
+	"time"
 
-	"github.com/eclipse/paho.mqtt.golang/packets"
 	"github.com/werbenhu/amqtt/config"
 	"github.com/werbenhu/amqtt/ifs"
 	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/packets"
 	"golang.org/x/net/websocket"
+)
+
+const (
+	StateGapSec = 10
 )
 
 type Broker struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
-	server    ifs.Server
-	processor ifs.Processor
+	s         ifs.Server
+	processor *Processor
+	ticker    *time.Ticker
 }
 
 func NewBroker(server ifs.Server) *Broker {
-	s := new(Broker)
-	s.server = server
-	s.ctx, s.cancel = context.WithCancel(server.Context())
-	s.processor = NewProcessor(server)
-	return s
+	b := new(Broker)
+	b.s = server
+	b.ctx, b.cancel = context.WithCancel(server.Context())
+	b.processor = NewProcessor(server)
+	return b
 }
 
-func (s *Broker) Handler(conn net.Conn, typ int) {
-	client := NewClient(conn, s.server.BrokerTopics(), typ)
+func (b *Broker) Handler(conn net.Conn, typ int) {
+	client := NewClient(conn, typ)
 	packet, err := client.ReadPacket()
 	if err != nil {
 		logger.Error("read connect packet error: ", err)
@@ -43,14 +50,14 @@ func (s *Broker) Handler(conn net.Conn, typ int) {
 		return
 	}
 
-	s.processor.ProcessConnect(client, cp)
-	client.ReadLoop(s.processor)
+	b.processor.ProcessConnect(client, cp)
+	client.ReadLoop(b.processor)
 }
 
-func (s *Broker) StartWebsocket() {
+func (b *Broker) StartWebsocket() {
 	http.Handle("/"+config.WsPath(), websocket.Handler(func(conn *websocket.Conn) {
 		conn.PayloadType = websocket.BinaryFrame
-		s.Handler(conn, config.TypWs)
+		b.Handler(conn, config.TypWs)
 	}))
 	var err error
 	if config.IsWsTsl() {
@@ -64,10 +71,61 @@ func (s *Broker) StartWebsocket() {
 	}
 }
 
-func (s *Broker) StartTcp() {
+func (b *Broker) publishState() {
+	topics := map[string]string{
+		"$SYS/broker/bytes/received":            strconv.Itoa(int(b.s.State().BytesRecv)),
+		"$SYS/broker/bytes/sent":                strconv.Itoa(int(b.s.State().BytesSent)),
+		"$SYS/broker/clients/connected":         strconv.Itoa(int(b.s.State().ClientsConnected)),
+		"$SYS/broker/clients/active":            strconv.Itoa(int(b.s.State().ClientsConnected)),
+		"$SYS/broker/clients/disconnected":      strconv.Itoa(int(b.s.State().ClientsDisconnected)),
+		"$SYS/broker/clients/inactive":          strconv.Itoa(int(b.s.State().ClientsDisconnected)),
+		"$SYS/broker/clients/maximum":           strconv.Itoa(int(b.s.State().ClientsMax)),
+		"$SYS/broker/clients/total":             strconv.Itoa(int(b.s.State().ClientsTotal)),
+		"$SYS/broker/messages/inflight":         strconv.Itoa(int(b.s.State().Inflight)),
+		"$SYS/broker/messages/received":         strconv.Itoa(int(b.s.State().MsgRecv)),
+		"$SYS/broker/messages/sent":             strconv.Itoa(int(b.s.State().MsgSent)),
+		"$SYS/broker/publish/messages/received": strconv.Itoa(int(b.s.State().PubRecv)),
+		"$SYS/broker/publish/messages/sent":     strconv.Itoa(int(b.s.State().PubSent)),
+		"$SYS/broker/retained_messages/count":   strconv.Itoa(int(b.s.State().Retain)),
+		"$SYS/broker/store/messages/count":      strconv.Itoa(int(b.s.State().StoreCount)),
+		"$SYS/broker/store/messages/bytes":      strconv.Itoa(int(b.s.State().StoreBytes)),
+		"$SYS/broker/subscriptions/count":       strconv.Itoa(int(b.s.State().SubCount)),
+		"$SYS/broker/version":                   b.s.State().Version,
+		"$SYS/broker/uptime":                    strconv.FormatInt(time.Now().Unix()-b.s.State().Uptime, 10),
+		"$SYS/broker/timestamp":                 strconv.FormatInt(time.Now().Unix(), 10),
+	}
+	for topic, msg := range topics {
+		brokerSubs := b.s.BrokerTopics().Subscribers(topic)
+		for _, sub := range brokerSubs {
+			if sub != nil {
+				packet := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
+				packet.Retain = false
+				packet.Payload = []byte(msg)
+				packet.TopicName = topic
+				b.processor.WritePacket(sub.(ifs.Client), packet)
+			}
+		}
+	}
+}
+
+func (b *Broker) StartStateLoop() {
+	for {
+		select {
+		case <-b.ticker.C:
+			b.publishState()
+		case <-b.ctx.Done():
+			return
+		}
+	}
+}
+
+func (b *Broker) StartTcp() {
 	tcpHost := config.TcpHost()
 	var tcpListener net.Listener
 	var err error
+
+	b.ticker = time.NewTicker(StateGapSec * time.Second)
+	go b.StartStateLoop()
 
 	if !config.IsTcpTsl() {
 		tcpListener, err = net.Listen("tcp", tcpHost)
@@ -93,11 +151,11 @@ func (s *Broker) StartTcp() {
 			logger.Fatalf("broker tcp Accept to %s Err:%s\n", tcpHost, err)
 			continue
 		} else {
-			go s.Handler(conn, config.TypTcp)
+			go b.Handler(conn, config.TypTcp)
 		}
 	}
 }
 
-func (s *Broker) Close() {
-	s.cancel()
+func (b *Broker) Close() {
+	b.cancel()
 }

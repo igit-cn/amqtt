@@ -37,7 +37,7 @@ func (b *Branch) GetLeaves() []*Leaf {
 	return leaves
 }
 
-func (b *Branch) AddBranch(topic string, identity string, subscriber interface{}, keys []string, index int) {
+func (b *Branch) AddBranch(topic string, identity string, subscriber interface{}, keys []string, index int) (exist bool) {
 	key := strings.TrimSpace(keys[index])
 	branch, ok := b.branches[key]
 	if !ok {
@@ -48,37 +48,41 @@ func (b *Branch) AddBranch(topic string, identity string, subscriber interface{}
 	}
 
 	if branch.name == "#" {
-		branch.AddLeaf(topic, identity, subscriber)
+		_, exist = branch.AddLeaf(topic, identity, subscriber)
 		if branch.parent != nil {
 			branch.parent.AddLeaf(topic, identity, subscriber)
 		}
 	} else if index+1 < len(keys) {
-		branch.AddBranch(topic, identity, subscriber, keys, index+1)
+		exist = branch.AddBranch(topic, identity, subscriber, keys, index+1)
 	} else {
-		branch.AddLeaf(topic, identity, subscriber)
+		_, exist = branch.AddLeaf(topic, identity, subscriber)
 	}
+	return exist
 }
 
-func (b *Branch) AddLeaf(topic string, identity string, subscriber interface{}) *Leaf {
+func (b *Branch) AddLeaf(topic string, identity string, subscriber interface{}) (*Leaf, bool) {
 	leaf, ok := b.leaves[topic]
+	exist := false
 	if !ok {
 		leaf = NewLeaf(b)
 		b.leaves[topic] = leaf
 	}
 	if subscriber != nil {
-		leaf.AddSubscriber(identity, subscriber)
+		exist = leaf.AddSubscriber(identity, subscriber)
 	}
-	return leaf
+	return leaf, exist
 }
 
-func (b *Branch) RemoveLeaf(topic string, identity string) {
+func (b *Branch) RemoveLeaf(topic string, identity string) (exist bool) {
 	leaf, ok := b.leaves[topic]
 	if ok {
 		leaf.RemoveSubscriber(identity)
 		if len(leaf.Subscribers()) == 0 && leaf.GetRetain() == nil {
 			delete(b.leaves, topic)
 		}
+		return true
 	}
+	return false
 }
 
 func (b *Branch) CheckClean() {
@@ -89,20 +93,26 @@ func (b *Branch) CheckClean() {
 	}
 }
 
-func (b *Branch) ScanRemoveLeaf(identity string, topic string, keys []string, index int) {
+func (b *Branch) ScanRemoveLeaf(identity string, topic string, keys []string, index int) (exist bool) {
 	if b.name == "#" {
-		b.RemoveLeaf(topic, identity)
-	} else if index+1 == len(keys) && (b.name == "+" || b.name == keys[index]) {
-		b.RemoveLeaf(topic, identity)
-	} else if b.name == "+" || b.name == keys[index] {
+		exist = b.RemoveLeaf(topic, identity)
+	} else if index+1 == len(keys) && b.name == keys[index] {
+		exist = b.RemoveLeaf(topic, identity)
+	} else if b.name == keys[index] {
 		for _, branch := range b.branches {
-			branch.ScanRemoveLeaf(identity, topic, keys, index+1)
+			if branch.ScanRemoveLeaf(identity, topic, keys, index+1) {
+				exist = true
+				break
+			}
 		}
 	}
-	b.CheckClean()
+	if exist {
+		b.CheckClean()
+	}
+	return exist
 }
 
-func (b *Branch) AddRetain(topic string, keys []string, index int, retain interface{}) {
+func (b *Branch) AddRetain(topic string, keys []string, index int, retain interface{}) bool {
 	key := strings.TrimSpace(keys[index])
 	branch, ok := b.branches[key]
 	if !ok {
@@ -113,23 +123,28 @@ func (b *Branch) AddRetain(topic string, keys []string, index int, retain interf
 	}
 
 	if index+1 < len(keys) {
-		branch.AddRetain(topic, keys, index+1, retain)
+		return branch.AddRetain(topic, keys, index+1, retain)
 	} else {
-		leaf := branch.AddLeaf(topic, "", nil)
-		leaf.SetRetain(retain)
+		leaf, _ := branch.AddLeaf(topic, "", nil)
+		return leaf.SetRetain(retain)
 	}
 }
 
-func (b *Branch) RemoveRetain(topic string, keys []string, index int) {
+func (b *Branch) RemoveRetain(topic string, keys []string, index int) bool {
 	if index+1 == len(keys) && b.name == keys[index] {
 		for k := range b.leaves {
-			b.leaves[k].RemoveRetain()
+			if b.leaves[k].RemoveRetain() {
+				return true
+			}
 		}
 	} else if b.name == keys[index] {
 		for _, branch := range b.branches {
-			branch.RemoveRetain(topic, keys, index+1)
+			if branch.RemoveRetain(topic, keys, index+1) {
+				return true
+			}
 		}
 	}
+	return false
 }
 
 func (b *Branch) GetRestRetain() []interface{} {

@@ -18,16 +18,29 @@ func (l *Leaf) GetRetain() interface{} {
 	return l.retain
 }
 
-func (l *Leaf) SetRetain(retain interface{}) {
+func (l *Leaf) SetRetain(retain interface{}) bool {
+	ret := false
+	if l.retain != nil {
+		ret = true
+	}
 	l.retain = retain
+	return ret
 }
 
-func (l *Leaf) RemoveRetain() {
+func (l *Leaf) RemoveRetain() bool {
+	if l.retain == nil {
+		return false
+	}
 	l.retain = nil
+	return true
 }
 
-func (l *Leaf) AddSubscriber(identity string, subscriber interface{}) {
+func (l *Leaf) AddSubscriber(identity string, subscriber interface{}) (exist bool) {
+	if _, ok := l.subscribers[identity]; ok {
+		exist = true
+	}
 	l.subscribers[identity] = subscriber
+	return exist
 }
 
 func (l *Leaf) RemoveSubscriber(identity string) {

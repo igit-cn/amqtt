@@ -1,7 +1,7 @@
 package ifs
 
 import (
-	"github.com/eclipse/paho.mqtt.golang/packets"
+	"github.com/werbenhu/amqtt/packets"
 )
 
 type Processor interface {

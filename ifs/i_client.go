@@ -1,8 +1,9 @@
 package ifs
 
 import (
-	"github.com/eclipse/paho.mqtt.golang/packets"
 	"net"
+
+	"github.com/werbenhu/amqtt/packets"
 )
 
 type Client interface {
@@ -11,11 +12,11 @@ type Client interface {
 	GetId() string
 	SetConn(conn net.Conn) Client
 	GetConn() net.Conn
-	SetTopics(topics Topic) Client
-	GetTopics() Topic
 	ReadPacket() (packets.ControlPacket, error)
 	WritePacket(packet packets.ControlPacket) error
-	ClearSubscribes() error
+	Topics() map[string]interface{}
+	AddTopic(topic string, data interface{}) (exist bool)
+	RemoveTopic(topic string) error
 	Done() <-chan struct{}
 	Close() error
 	GetTyp() int

@@ -18,7 +18,7 @@ type Trie struct {
 	foliage sync.Map
 }
 
-func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) error {
+func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) (exist bool) {
 	if strings.Contains(topic, "#") || strings.Contains(topic, "+") {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -27,36 +27,44 @@ func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) 
 		if strings.TrimSpace(keys[0]) == "" {
 			index = 1
 		}
-		t.root.AddBranch(topic, identity, subscriber, keys, index)
+		return t.root.AddBranch(topic, identity, subscriber, keys, index)
 	} else {
 		leaf, ok := t.foliage.Load(topic)
 		if !ok {
 			leaf = NewLeaf(nil)
 			t.foliage.Store(topic, leaf)
 		}
-		leaf.(*Leaf).AddSubscriber(identity, subscriber)
+		return leaf.(*Leaf).AddSubscriber(identity, subscriber)
 	}
-	return nil
 }
 
-func (t *Trie) Unsubscribe(topic string, identity string) error {
-	_, ok := t.foliage.Load(topic)
-	if ok {
-		t.foliage.Delete(topic)
-	}
-
+func (t *Trie) Unsubscribe(topic string, identity string) (exist bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	keys := strings.Split(topic, "/")
-	index := 0
-	if strings.TrimSpace(keys[0]) == "" {
-		index = 1
+	if strings.Contains(topic, "#") || strings.Contains(topic, "+") {
+		keys := strings.Split(topic, "/")
+		index := 0
+		if strings.TrimSpace(keys[0]) == "" {
+			index = 1
+		}
+		for _, branch := range t.root.GetBranches() {
+			if branch.ScanRemoveLeaf(identity, topic, keys, index) {
+				exist = true
+				break
+			}
+		}
+	} else {
+		l, ok := t.foliage.Load(topic)
+		if ok {
+			leaf := l.(*Leaf)
+			leaf.RemoveSubscriber(identity)
+			if len(leaf.Subscribers()) == 0 && leaf.GetRetain() == nil {
+				t.foliage.Delete(topic)
+			}
+			exist = true
+		}
 	}
-
-	for _, branch := range t.root.GetBranches() {
-		branch.ScanRemoveLeaf(identity, topic, keys, index)
-	}
-	return nil
+	return
 }
 
 func (t *Trie) Subscribers(topic string) []interface{} {
@@ -87,7 +95,7 @@ func (t *Trie) Subscribers(topic string) []interface{} {
 	return subscribers
 }
 
-func (t *Trie) AddRetain(topic string, packet interface{}) error {
+func (t *Trie) AddRetain(topic string, packet interface{}) (exist bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	keys := strings.Split(topic, "/")
@@ -95,11 +103,10 @@ func (t *Trie) AddRetain(topic string, packet interface{}) error {
 	if strings.TrimSpace(keys[0]) == "" {
 		index = 1
 	}
-	t.root.AddRetain(topic, keys, index, packet)
-	return nil
+	return t.root.AddRetain(topic, keys, index, packet)
 }
 
-func (t *Trie) RemoveRetain(topic string) error {
+func (t *Trie) RemoveRetain(topic string) (exist bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	keys := strings.Split(topic, "/")
@@ -108,9 +115,11 @@ func (t *Trie) RemoveRetain(topic string) error {
 		index = 1
 	}
 	for _, branch := range t.root.GetBranches() {
-		branch.RemoveRetain(topic, keys, index)
+		if branch.RemoveRetain(topic, keys, index) {
+			return true
+		}
 	}
-	return nil
+	return false
 }
 
 func (t *Trie) SearchRetain(topic string) ([]interface{}, error) {

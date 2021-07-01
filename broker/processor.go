@@ -2,12 +2,13 @@ package broker
 
 import (
 	"errors"
+	"sync/atomic"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang/packets"
 	"github.com/werbenhu/amqtt/config"
 	"github.com/werbenhu/amqtt/ifs"
 	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/packets"
 )
 
 const (
@@ -15,73 +16,75 @@ const (
 )
 
 type Processor struct {
-	server      ifs.Server
+	s           ifs.Server
 	qos2Msgs    map[uint16]int64
 	maxQos2Msgs int
 }
 
 func NewProcessor(server ifs.Server) *Processor {
 	p := new(Processor)
-	p.server = server
+	p.s = server
 	p.qos2Msgs = make(map[uint16]int64)
 	return p
 }
 
-func (s *Processor) checkQos2Msg(messageId uint16) error {
-	if _, found := s.qos2Msgs[messageId]; found {
-		delete(s.qos2Msgs, messageId)
+func (p *Processor) checkQos2Msg(messageId uint16) error {
+	if _, found := p.qos2Msgs[messageId]; found {
+		delete(p.qos2Msgs, messageId)
 	} else {
 		return errors.New("RC_PACKET_IDENTIFIER_NOT_FOUND")
 	}
 	return nil
 }
 
-func (s *Processor) saveQos2Msg(messageId uint16) error {
-	if s.isQos2MsgFull() {
+func (p *Processor) saveQos2Msg(messageId uint16) error {
+	if p.isQos2MsgFull() {
 		return errors.New("DROPPED_QOS2_PACKET_FOR_TOO_MANY_AWAITING_REL")
 	}
 
-	if _, found := s.qos2Msgs[messageId]; found {
+	if _, found := p.qos2Msgs[messageId]; found {
 		return errors.New("RC_PACKET_IDENTIFIER_IN_USE")
 	}
-	s.qos2Msgs[messageId] = time.Now().Unix()
-	time.AfterFunc(time.Duration(Qos2Timeout)*time.Second, s.expireQos2Msg)
+	p.qos2Msgs[messageId] = time.Now().Unix()
+	time.AfterFunc(time.Duration(Qos2Timeout)*time.Second, p.expireQos2Msg)
 	return nil
 }
 
-func (s *Processor) expireQos2Msg() {
-	if len(s.qos2Msgs) == 0 {
+func (p *Processor) expireQos2Msg() {
+	if len(p.qos2Msgs) == 0 {
 		return
 	}
 	now := time.Now().Unix()
-	for messageId, ts := range s.qos2Msgs {
+	for messageId, ts := range p.qos2Msgs {
 		if now-ts >= Qos2Timeout {
-			delete(s.qos2Msgs, messageId)
+			delete(p.qos2Msgs, messageId)
 		}
 	}
 }
 
-func (s *Processor) isQos2MsgFull() bool {
-	if s.maxQos2Msgs == 0 {
+func (p *Processor) isQos2MsgFull() bool {
+	if p.maxQos2Msgs == 0 {
 		return false
 	}
-	if len(s.qos2Msgs) < s.maxQos2Msgs {
+	if len(p.qos2Msgs) < p.maxQos2Msgs {
 		return false
 	}
 	return true
 }
 
-func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
+func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	logger.Debugf("DoPublish topic:%s, packet:%+v", topic, packet)
-	brokerSubs := s.server.BrokerTopics().Subscribers(topic)
+	brokerSubs := p.s.BrokerTopics().Subscribers(topic)
+	atomic.AddInt64(&p.s.State().PubRecv, 1)
 	for _, sub := range brokerSubs {
 		if sub != nil {
 			logger.Debugf("DoPublish sub c:%s", sub.(ifs.Client).GetId())
-			sub.(ifs.Client).WritePacket(packet)
+			atomic.AddInt64(&p.s.State().PubSent, 1)
+			p.WritePacket(sub.(ifs.Client), packet)
 		}
 	}
 
-	clusterSubs := s.server.ClusterTopics().Subscribers(topic)
+	clusterSubs := p.s.ClusterTopics().Subscribers(topic)
 	for _, sub := range clusterSubs {
 		if sub != nil {
 			sub.(ifs.Client).WritePacket(packet)
@@ -89,32 +92,32 @@ func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	}
 }
 
-func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPacket) {
+func (p *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPacket) {
 	topic := packet.TopicName
 	switch packet.Qos {
 	case config.QosAtMostOnce:
-		s.DoPublish(topic, packet)
+		p.DoPublish(topic, packet)
 
 	case config.QosAtLeastOnce:
 		puback := packets.NewControlPacket(packets.Puback).(*packets.PubackPacket)
 		puback.MessageID = packet.MessageID
-		if err := client.WritePacket(puback); err != nil {
+		if err := p.WritePacket(client, puback); err != nil {
 			logger.Errorf("send puback error: %s\n", err)
 			return
 		}
-		s.DoPublish(topic, packet)
+		p.DoPublish(topic, packet)
 
 	case config.QosExactlyOnce:
-		if err := s.saveQos2Msg(packet.MessageID); nil != err {
+		if err := p.saveQos2Msg(packet.MessageID); nil != err {
 			return
 		}
 		pubrec := packets.NewControlPacket(packets.Pubrec).(*packets.PubrecPacket)
 		pubrec.MessageID = packet.MessageID
-		if err := client.WritePacket(pubrec); err != nil {
+		if err := p.WritePacket(client, pubrec); err != nil {
 			logger.Errorf("send pubrec error: %s\n", err)
 			return
 		}
-		s.DoPublish(topic, packet)
+		p.DoPublish(topic, packet)
 	default:
 		logger.Error("publish with unknown qos")
 		return
@@ -122,74 +125,102 @@ func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPac
 
 	if packet.Retain {
 		if len(packet.Payload) > 0 {
-			s.server.BrokerTopics().AddRetain(topic, packet)
+			if !p.s.BrokerTopics().AddRetain(topic, packet) {
+				//if not exist old retain, add retain msg count
+				atomic.AddInt64(&p.s.State().Retain, 1)
+			}
 		} else {
-			s.server.BrokerTopics().RemoveRetain(topic)
+			//if exist old retain, reduce retain msg count
+			if p.s.BrokerTopics().RemoveRetain(topic) {
+				atomic.AddInt64(&p.s.State().Retain, -1)
+			}
 		}
 	}
 }
 
-func (s *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.UnsubscribePacket) {
+func (p *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.UnsubscribePacket) {
 	topics := packet.Topics
 	unsuback := packets.NewControlPacket(packets.Unsuback).(*packets.UnsubackPacket)
 	unsuback.MessageID = packet.MessageID
 
 	for _, topic := range topics {
-		s.server.BrokerTopics().Unsubscribe(topic, client.GetId())
+		client.RemoveTopic(topic)
+		if p.s.BrokerTopics().Unsubscribe(topic, client.GetId()) {
+			// if the subcribe topic is exist, reduce the count
+			atomic.AddInt64(&p.s.State().SubCount, -1)
+		}
 	}
-	client.WritePacket(unsuback)
+	p.WritePacket(client, unsuback)
 }
 
-func (s *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {
+func (p *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {
 	topics := packet.Topics
 	suback := packets.NewControlPacket(packets.Suback).(*packets.SubackPacket)
 	suback.MessageID = packet.MessageID
-	client.WritePacket(suback)
+	p.WritePacket(client, suback)
 
+	logger.Errorf("ProcessSubscribe topics: %+v\n", topics)
 	for _, topic := range topics {
-		s.server.BrokerTopics().Subscribe(topic, client.GetId(), client)
-		retains, _ := s.server.BrokerTopics().SearchRetain(topic)
+		client.AddTopic(topic, client.GetId())
+		if !p.s.BrokerTopics().Subscribe(topic, client.GetId(), client) {
+			//if subcribe topic not exist, add subcribe count
+			atomic.AddInt64(&p.s.State().SubCount, 1)
+		}
+		retains, _ := p.s.BrokerTopics().SearchRetain(topic)
 		for _, retain := range retains {
-			client.WritePacket(retain.(*packets.PublishPacket))
+			pubpack := retain.(*packets.PublishPacket)
+			p.WritePacket(client, pubpack)
 		}
 	}
 
-	s.server.Clusters().Range(func(k, v interface{}) bool {
+	p.s.Clusters().Range(func(k, v interface{}) bool {
 		v.(ifs.Client).WritePacket(packet)
 		return true
 	})
 }
 
-func (s *Processor) ProcessPing(client ifs.Client) {
-	resp := packets.NewControlPacket(packets.Pingresp).(*packets.PingrespPacket)
-	err := client.WritePacket(resp)
-	if err != nil {
+func (p *Processor) ProcessPing(client ifs.Client) {
+	pong := packets.NewControlPacket(packets.Pingresp).(*packets.PingrespPacket)
+	if err := p.WritePacket(client, pong); err != nil {
 		return
 	}
 }
 
-func (s *Processor) ProcessDisconnect(client ifs.Client) {
+func (p *Processor) ProcessDisconnect(client ifs.Client) {
 	logger.Debugf("broker ProcessDisconnect clientId:%s\n", client.GetId())
 	client.Close()
+
+	for topic := range client.Topics() {
+		logger.Debugf("ProcessDisconnect topic:%s", topic)
+		client.RemoveTopic(topic)
+		if p.s.BrokerTopics().Unsubscribe(topic, client.GetId()) {
+			// if the subcribe topic is exist, reduce the count
+			logger.Debugf("ProcessDisconnect exist topic:%s", topic)
+			atomic.AddInt64(&p.s.State().SubCount, -1)
+		}
+	}
+
+	atomic.AddInt64(&p.s.State().ClientsConnected, -1)
+	atomic.AddInt64(&p.s.State().ClientsDisconnected, 1)
 }
 
-func (s *Processor) ProcessPubrel(client ifs.Client, cp packets.ControlPacket) {
+func (p *Processor) ProcessPubrel(client ifs.Client, cp packets.ControlPacket) {
 	packet := cp.(*packets.PubrelPacket)
-	s.checkQos2Msg(packet.MessageID)
+	p.checkQos2Msg(packet.MessageID)
 	pubcomp := packets.NewControlPacket(packets.Pubcomp).(*packets.PubcompPacket)
 	pubcomp.MessageID = packet.MessageID
-	if err := client.WritePacket(pubcomp); err != nil {
+	if err := p.WritePacket(client, pubcomp); err != nil {
 		logger.Debugf("send pubcomp error: %s\n", err)
 		return
 	}
 }
 
-func (s *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
+func (p *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
 }
 
-func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
+func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
-	if old, ok := s.server.Clients().Load(clientId); ok {
+	if old, ok := p.s.Clients().Load(clientId); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
@@ -198,14 +229,14 @@ func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 	connack.SessionPresent = cp.CleanSession
 	connack.ReturnCode = cp.Validate()
 
-	err := client.WritePacket(connack)
+	err := p.WritePacket(client, connack)
 	if err != nil {
 		logger.Error("send connack error, ", err)
 		return
 	}
 
 	client.SetId(clientId)
-	s.server.Clients().Store(clientId, client)
+	p.s.Clients().Store(clientId, client)
 
 	if cp.WillFlag {
 		will := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
@@ -216,24 +247,45 @@ func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 		will.Dup = cp.Dup
 		client.(*Client).SetWill(will)
 	}
+
+	atomic.AddInt64(&p.s.State().ClientsTotal, 1)
+	atomic.AddInt64(&p.s.State().ClientsConnected, 1)
+	if atomic.LoadInt64(&p.s.State().ClientsConnected) > atomic.LoadInt64(&p.s.State().ClientsMax) {
+		atomic.AddInt64(&p.s.State().ClientsMax, 1)
+	}
 }
 
-func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
+func (p *Processor) WritePacket(client ifs.Client, packet packets.ControlPacket) error {
+	err := client.WritePacket(packet)
+	if err != nil {
+		logger.Error("write packet error, ", err)
+		return err
+	}
+	logger.Debugf("Processor writePacket size:%d", packet.Size())
+	atomic.AddInt64(&p.s.State().MsgSent, 1)
+	atomic.AddInt64(&p.s.State().BytesSent, int64(packet.Size()))
+	return nil
+}
+
+func (p *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
+
+	atomic.AddInt64(&p.s.State().BytesRecv, int64(cp.Size()))
+	atomic.AddInt64(&p.s.State().MsgRecv, 1)
 	switch packet := cp.(type) {
 	case *packets.PublishPacket:
-		s.ProcessPublish(client, packet)
+		p.ProcessPublish(client, packet)
 	case *packets.PubrelPacket:
-		s.ProcessPubrel(client, packet)
+		p.ProcessPubrel(client, packet)
 	case *packets.SubscribePacket:
-		s.ProcessSubscribe(client, packet)
+		p.ProcessSubscribe(client, packet)
 	case *packets.UnsubscribePacket:
-		s.ProcessUnSubscribe(client, packet)
+		p.ProcessUnSubscribe(client, packet)
 	case *packets.PingreqPacket:
-		s.ProcessPing(client)
+		p.ProcessPing(client)
 	case *packets.DisconnectPacket:
-		s.ProcessDisconnect(client)
+		p.ProcessDisconnect(client)
 	case *packets.ConnectPacket:
-		s.ProcessConnect(client, packet)
+		p.ProcessConnect(client, packet)
 
 	case *packets.PubcompPacket:
 	case *packets.SubackPacket:

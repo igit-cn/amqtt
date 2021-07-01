@@ -1,23 +1,23 @@
 package cluster
 
 import (
-	"github.com/eclipse/paho.mqtt.golang/packets"
 	"github.com/werbenhu/amqtt/ifs"
 	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/packets"
 )
 
 type Processor struct {
-	server ifs.Server
+	s ifs.Server
 }
 
 func NewProcessor(server ifs.Server) *Processor {
 	p := new(Processor)
-	p.server = server
+	p.s = server
 	return p
 }
 
-func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
-	subs := s.server.BrokerTopics().Subscribers(topic)
+func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
+	subs := p.s.BrokerTopics().Subscribers(topic)
 	for _, sub := range subs {
 		if sub != nil {
 			sub.(ifs.Client).WritePacket(packet)
@@ -25,44 +25,47 @@ func (s *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	}
 }
 
-func (s *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPacket) {
+func (p *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPacket) {
 	topic := packet.TopicName
-	s.DoPublish(topic, packet)
+	p.DoPublish(topic, packet)
 
 	//If other cluster node have this retain message, then the current cluster node must delete this retain message
 	//Ensure that there is only one retain message for a topic in the entire clusters
 	if packet.Retain {
-		s.server.BrokerTopics().RemoveRetain(topic)
+		p.s.BrokerTopics().RemoveRetain(topic)
 	}
 }
 
-func (s *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.UnsubscribePacket) {
+func (p *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.UnsubscribePacket) {
 	topics := packet.Topics
 	unsuback := packets.NewControlPacket(packets.Unsuback).(*packets.UnsubackPacket)
 	unsuback.MessageID = packet.MessageID
 
 	for _, topic := range topics {
-		s.server.ClusterTopics().Unsubscribe(topic, client.GetId())
+		p.s.ClusterTopics().Unsubscribe(topic, client.GetId())
+		client.RemoveTopic(topic)
 	}
 	client.WritePacket(unsuback)
 }
 
-func (s *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {
+func (p *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {
 	topics := packet.Topics
 	suback := packets.NewControlPacket(packets.Suback).(*packets.SubackPacket)
 	suback.MessageID = packet.MessageID
 	client.WritePacket(suback)
 
 	for _, topic := range topics {
-		s.server.ClusterTopics().Subscribe(topic, client.GetId(), client)
-		retains, _ := s.server.BrokerTopics().SearchRetain(topic)
+		p.s.ClusterTopics().Subscribe(topic, client.GetId(), client)
+		client.AddTopic(topic, client.GetId())
+
+		retains, _ := p.s.BrokerTopics().SearchRetain(topic)
 		for _, retain := range retains {
 			client.WritePacket(retain.(*packets.PublishPacket))
 		}
 	}
 }
 
-func (s *Processor) ProcessPing(client ifs.Client) {
+func (p *Processor) ProcessPing(client ifs.Client) {
 	resp := packets.NewControlPacket(packets.Pingresp).(*packets.PingrespPacket)
 	err := client.WritePacket(resp)
 	if err != nil {
@@ -71,19 +74,25 @@ func (s *Processor) ProcessPing(client ifs.Client) {
 	}
 }
 
-func (s *Processor) ProcessDisconnect(client ifs.Client) {
+func (p *Processor) ProcessDisconnect(client ifs.Client) {
 	logger.Debugf("cluster ProcessDisconnect clientId:%s", client.GetId())
-	s.server.Clusters().Delete(client.GetId())
+	p.s.Clusters().Delete(client.GetId())
 	client.Close()
+
+	for topic := range client.Topics() {
+		logger.Debugf("ProcessDisconnect topic:%s", topic)
+		client.RemoveTopic(topic)
+		p.s.ClusterTopics().Unsubscribe(topic, client.GetId())
+	}
 }
 
-func (s *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
+func (p *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket) {
 	logger.Debugf("cluster ProcessConnack clientId:%s", client.GetId())
 }
 
-func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
+func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
 	clientId := cp.ClientIdentifier
-	if old, ok := s.server.Clusters().Load(clientId); ok {
+	if old, ok := p.s.Clusters().Load(clientId); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
@@ -99,25 +108,25 @@ func (s *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 	}
 	logger.Debugf("cluster ProcessConnect clientId:%s", client.GetId())
 	client.SetId(clientId)
-	s.server.Clusters().Store(clientId, client)
+	p.s.Clusters().Store(clientId, client)
 }
 
-func (s *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
+func (p *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
 	switch packet := cp.(type) {
 	case *packets.ConnackPacket:
-		s.ProcessConnack(client, packet)
+		p.ProcessConnack(client, packet)
 	case *packets.ConnectPacket:
-		s.ProcessConnect(client, packet)
+		p.ProcessConnect(client, packet)
 	case *packets.PublishPacket:
-		s.ProcessPublish(client, packet)
+		p.ProcessPublish(client, packet)
 	case *packets.SubscribePacket:
-		s.ProcessSubscribe(client, packet)
+		p.ProcessSubscribe(client, packet)
 	case *packets.UnsubscribePacket:
-		s.ProcessUnSubscribe(client, packet)
+		p.ProcessUnSubscribe(client, packet)
 	case *packets.PingreqPacket:
-		s.ProcessPing(client)
+		p.ProcessPing(client)
 	case *packets.DisconnectPacket:
-		s.ProcessDisconnect(client)
+		p.ProcessDisconnect(client)
 
 	case *packets.PubackPacket:
 	case *packets.PubrecPacket:

@@ -21,6 +21,7 @@ type Server struct {
 	clusters      *sync.Map
 	b             *broker.Broker
 	c             *cluster.Cluster
+	state         *ifs.ServerState
 }
 
 func NewServer(ctx context.Context) *Server {
@@ -32,6 +33,7 @@ func NewServer(ctx context.Context) *Server {
 	s.clusters = new(sync.Map)
 	s.b = broker.NewBroker(s)
 	s.c = cluster.NewCluster(s)
+	s.state = ifs.NewState("1.0.0")
 	return s
 }
 
@@ -68,4 +70,8 @@ func (s *Server) Clients() *sync.Map {
 
 func (s *Server) Clusters() *sync.Map {
 	return s.clusters
+}
+
+func (s *Server) State() *ifs.ServerState {
+	return s.state
 }

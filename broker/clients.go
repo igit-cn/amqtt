@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net"
 
-	"github.com/eclipse/paho.mqtt.golang/packets"
 	"github.com/werbenhu/amqtt/ifs"
 	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/packets"
 )
 
 type Client struct {
@@ -15,17 +15,16 @@ type Client struct {
 	conn       net.Conn
 	ctx        context.Context
 	cancelFunc context.CancelFunc
-	subscribes []string
-	topics     ifs.Topic
+	topics     map[string]interface{}
 	typ        int
 	will       *packets.PublishPacket
 }
 
-func NewClient(conn net.Conn, topics ifs.Topic, typ int) ifs.Client {
+func NewClient(conn net.Conn, typ int) ifs.Client {
 	c := new(Client)
 	c.conn = conn
-	c.topics = topics
 	c.typ = typ
+	c.topics = make(map[string]interface{})
 	c.ctx, c.cancelFunc = context.WithCancel(context.Background())
 	return c
 }
@@ -64,21 +63,12 @@ func (c *Client) SetConn(conn net.Conn) ifs.Client {
 	return c
 }
 
-func (c *Client) SetTopics(topics ifs.Topic) ifs.Client {
-	c.topics = topics
-	return c
-}
-
 func (c *Client) GetId() string {
 	return c.id
 }
 
 func (c *Client) GetConn() net.Conn {
 	return c.conn
-}
-
-func (c *Client) GetTopics() ifs.Topic {
-	return c.topics
 }
 
 func (c *Client) GetTyp() int {
@@ -98,17 +88,30 @@ func (c *Client) ReadPacket() (packets.ControlPacket, error) {
 
 func (c *Client) WritePacket(packet packets.ControlPacket) error {
 	if c.conn != nil {
-		logger.Debugf("WritePacket id:%s, packet:%s", c.id, packet.String())
+		// logger.Debugf("WritePacket id:%s, packet:%s", c.id, packet.String())
 		err := packet.Write(c.conn)
 		return err
 	}
 	return nil
 }
 
-func (c *Client) ClearSubscribes() error {
-	for _, topic := range c.subscribes {
-		c.topics.Unsubscribe(topic, c.GetId())
+func (c *Client) Topics() map[string]interface{} {
+	return c.topics
+}
+
+func (c *Client) AddTopic(topic string, data interface{}) (exist bool) {
+	if _, ok := c.topics[topic]; ok {
+		exist = true
 	}
+	c.topics[topic] = data
+	return
+}
+
+func (c *Client) RemoveTopic(topic string) error {
+	if _, ok := c.topics[topic]; !ok {
+		return errors.New("topic not exist")
+	}
+	delete(c.topics, topic)
 	return nil
 }
 
@@ -118,7 +121,6 @@ func (c *Client) Done() <-chan struct{} {
 
 func (c *Client) Close() error {
 	c.cancelFunc()
-	c.ClearSubscribes()
 
 	var err error
 	if c.conn != nil {

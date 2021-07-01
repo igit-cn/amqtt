@@ -7,29 +7,29 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang/packets"
 	"github.com/werbenhu/amqtt/config"
 	"github.com/werbenhu/amqtt/ifs"
 	"github.com/werbenhu/amqtt/logger"
+	"github.com/werbenhu/amqtt/packets"
 )
 
 type Cluster struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
-	server    ifs.Server
+	s         ifs.Server
 	processor ifs.Processor
 }
 
 func NewCluster(server ifs.Server) *Cluster {
-	s := new(Cluster)
-	s.server = server
-	s.ctx, s.cancel = context.WithCancel(server.Context())
-	s.processor = NewProcessor(server)
-	return s
+	c := new(Cluster)
+	c.s = server
+	c.ctx, c.cancel = context.WithCancel(server.Context())
+	c.processor = NewProcessor(server)
+	return c
 }
 
-func (s *Cluster) HandlerServer(conn net.Conn) {
-	client := NewClient(conn, s.server.ClusterTopics(), config.TypServer)
+func (c *Cluster) HandlerServer(conn net.Conn) {
+	client := NewClient(conn, config.TypServer)
 	packet, err := client.ReadPacket()
 	if err != nil {
 		logger.Error("read connect packet error: ", err)
@@ -41,11 +41,11 @@ func (s *Cluster) HandlerServer(conn net.Conn) {
 		return
 	}
 	client.SetId(cp.ClientIdentifier)
-	s.processor.ProcessConnect(client, cp)
-	client.ReadLoop(s.processor)
+	c.processor.ProcessConnect(client, cp)
+	client.ReadLoop(c.processor)
 }
 
-func (s *Cluster) StartServer() {
+func (c *Cluster) StartServer() {
 	tcpHost := config.ClusterHost()
 	var tcpListener net.Listener
 	var err error
@@ -74,12 +74,12 @@ func (s *Cluster) StartServer() {
 			logger.Fatalf("cluster server tcp Accept to %s Err:%s", tcpHost, err.Error())
 			continue
 		} else {
-			go s.HandlerServer(conn)
+			go c.HandlerServer(conn)
 		}
 	}
 }
 
-func (s *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
+func (c *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 	connect := packets.NewControlPacket(packets.Connect).(*packets.ConnectPacket)
 	connect.ProtocolName = "MQTT"
 	connect.ProtocolVersion = 4
@@ -87,7 +87,7 @@ func (s *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 	connect.ClientIdentifier = config.ClusterName()
 	connect.Keepalive = 60
 
-	client := NewClient(conn, s.server.ClusterTopics(), config.TypClient)
+	client := NewClient(conn, config.TypClient)
 	client.SetId(cluster.Name)
 	err := client.WritePacket(connect)
 	if err != nil {
@@ -95,15 +95,15 @@ func (s *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 		return
 	}
 
-	if old, ok := s.server.Clients().Load(cluster.Name); ok {
+	if old, ok := c.s.Clients().Load(cluster.Name); ok {
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
 	logger.Debugf("cluster ProcessConnack clientId:%s", client.GetId())
 	client.SetId(cluster.Name)
-	s.server.Clusters().Store(cluster.Name, client)
+	c.s.Clusters().Store(cluster.Name, client)
 
-	client.ReadLoop(s.processor)
+	client.ReadLoop(c.processor)
 }
 
 func (s *Cluster) StartClient(cluster *config.ClusterNode) {
@@ -117,14 +117,14 @@ func (s *Cluster) StartClient(cluster *config.ClusterNode) {
 	}
 }
 
-func (s *Cluster) CheckHealthy() {
+func (c *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
-		exist, ok := s.server.Clients().Load(clientId)
+		exist, ok := c.s.Clients().Load(clientId)
 		logger.Debugf("CheckHealthy clientId:%s, ok:%t", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
-			go s.StartClient(&cluster)
+			go c.StartClient(&cluster)
 		} else if exist.(*Client).GetTyp() == config.TypClient {
 			logger.Debugf("CheckHealthy write PingreqPacket conn:%+v", exist)
 			ping := packets.NewControlPacket(packets.Pingreq).(*packets.PingreqPacket)
@@ -133,27 +133,27 @@ func (s *Cluster) CheckHealthy() {
 	}
 }
 
-func (s *Cluster) HeartBeat() {
+func (c *Cluster) HeartBeat() {
 	tick := time.NewTicker(10 * time.Second)
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-c.ctx.Done():
 			return
 		case <-tick.C:
-			s.CheckHealthy()
+			c.CheckHealthy()
 		}
 	}
 }
 
-func (s *Cluster) Start() {
-	go s.StartServer()
-	go s.CheckHealthy()
-	go s.HeartBeat()
+func (c *Cluster) Start() {
+	go c.StartServer()
+	go c.CheckHealthy()
+	go c.HeartBeat()
 
-	<-s.ctx.Done()
+	<-c.ctx.Done()
 	logger.Debug("cluster done")
 }
 
-func (s *Cluster) Close() {
-	s.cancel()
+func (c *Cluster) Close() {
+	c.cancel()
 }
