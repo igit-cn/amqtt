@@ -75,6 +75,7 @@ func (p *Processor) isQos2MsgFull() bool {
 func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	brokerSubs := p.s.BrokerTopics().Subscribers(topic)
 	atomic.AddInt64(&p.s.State().PubRecv, 1)
+
 	for topic, subs := range brokerSubs {
 		newPacket := packet.Copy()
 		newPacket.TopicName = topic
