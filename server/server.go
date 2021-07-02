@@ -79,3 +79,9 @@ func (s *Server) Clusters() *sync.Map {
 func (s *Server) State() *ifs.ServerState {
 	return s.state
 }
+
+func (s *Server) AddSub() {
+	s.subsMu.Lock()
+	defer s.subsMu.Unlock()
+	return s.subs
+}

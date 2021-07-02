@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/werbenhu/amqtt/config"
@@ -42,7 +43,17 @@ func (c *Cluster) HandlerServer(conn net.Conn) {
 		return
 	}
 	client.SetId(cp.ClientIdentifier)
+
+	clientId := cp.ClientIdentifier
+	if old, ok := c.s.Clusters().Load(clientId); ok {
+		logger.Debugf("cluster HandlerServer close old clientId:%s", client.GetId())
+		oldClient := old.(ifs.Client)
+		oldClient.Close()
+	}
 	c.processor.ProcessConnect(client, cp)
+	client.SetId(clientId)
+	c.s.Clusters().Store(clientId, client)
+	c.SyncTopics()
 	client.ReadLoop(c.processor)
 }
 
@@ -105,26 +116,50 @@ func (c *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 	}
 	client.SetId(cluster.Name)
 	c.s.Clusters().Store(cluster.Name, client)
-
+	c.SyncTopics()
 	client.ReadLoop(c.processor)
 }
 
-func (s *Cluster) StartClient(cluster *config.ClusterNode) {
+func (c *Cluster) StartClient(cluster *config.ClusterNode) {
 	logger.Infof("Cluster start connect to %s", cluster.Name)
 	conn, err := net.DialTimeout("tcp", cluster.Host, 60*time.Second)
 	if err != nil {
 		logger.Errorf("Cluster fail to connect to %s Err:%s", cluster.Host, err.Error())
 		return
 	} else {
-		s.HandlerClient(conn, cluster)
+		c.HandlerClient(conn, cluster)
 	}
+}
+
+func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster *config.ClusterNode) {
+	clientId := strings.TrimSpace(cluster.Name)
+	exist, ok := c.s.Clusters().Load(clientId)
+	if ok {
+		c.s.BrokerTopics().RangeTopics(func(topic, client interface{}) bool {
+			logger.Debugf("syncNodeTopics cluster:%+v, topic:%s", cluster, topic)
+			subpack := packets.NewControlPacket(packets.Pingreq).(*packets.SubscribePacket)
+			subpack.Topics = []string{topic.(string)}
+			exist.(*Client).WritePacket(subpack)
+			return true
+		})
+	}
+	wg.Done()
+}
+
+//When two cluster nodes are connected, topics that need to be synchronized
+func (c *Cluster) SyncTopics() {
+	wg := sync.WaitGroup{}
+	for _, cluster := range config.Clusters() {
+		wg.Add(1)
+		go c.syncNodeTopics(&wg, &cluster)
+	}
+	wg.Wait()
 }
 
 func (c *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
 		exist, ok := c.s.Clusters().Load(clientId)
-		//logger.Debugf("CheckHealthy clientId:%s, ok:%t", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
 			go c.StartClient(&cluster)

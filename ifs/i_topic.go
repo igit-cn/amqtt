@@ -8,4 +8,6 @@ type TopicStorage interface {
 	AddRetain(topic string, packet interface{}) (exist bool)
 	RemoveRetain(topic string) (exist bool)
 	SearchRetain(topic string) ([]interface{}, error)
+
+	RangeTopics(f func(topic, client interface{}) bool)
 }

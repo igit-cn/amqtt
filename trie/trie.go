@@ -28,14 +28,14 @@ func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) 
 			index = 1
 		}
 		return t.root.AddBranch(topic, identity, subscriber, keys, index)
-	} else {
-		leaf, ok := t.foliage.Load(topic)
-		if !ok {
-			leaf = NewLeaf(nil)
-			t.foliage.Store(topic, leaf)
-		}
-		return leaf.(*Leaf).AddSubscriber(identity, subscriber)
 	}
+
+	leaf, ok := t.foliage.Load(topic)
+	if !ok {
+		leaf = NewLeaf(nil)
+		t.foliage.Store(topic, leaf)
+	}
+	return leaf.(*Leaf).AddSubscriber(identity, subscriber)
 }
 
 func (t *Trie) Unsubscribe(topic string, identity string) (exist bool) {
@@ -67,8 +67,17 @@ func (t *Trie) Unsubscribe(topic string, identity string) (exist bool) {
 	return
 }
 
+func (t *Trie) RangeTopics(f func(topic, client interface{}) bool) {
+	t.foliage.Range(f)
+}
+
 func (t *Trie) Subscribers(topic string) map[string][]interface{} {
+
 	subscribers := make(map[string][]interface{})
+	if strings.Contains(topic, "#") || strings.Contains(topic, "+") {
+		return subscribers
+	}
+
 	leaf, ok := t.foliage.Load(topic)
 	if ok {
 		for _, subscriber := range leaf.(*Leaf).Subscribers() {

@@ -92,13 +92,6 @@ func (p *Processor) ProcessConnack(client ifs.Client, cp *packets.ConnackPacket)
 }
 
 func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket) {
-	clientId := cp.ClientIdentifier
-	if old, ok := p.s.Clusters().Load(clientId); ok {
-		logger.Debugf("cluster ProcessConnect close old clientId:%s", client.GetId())
-		oldClient := old.(ifs.Client)
-		oldClient.Close()
-	}
-
 	connack := packets.NewControlPacket(packets.Connack).(*packets.ConnackPacket)
 	connack.SessionPresent = cp.CleanSession
 	connack.ReturnCode = cp.Validate()
@@ -108,9 +101,6 @@ func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 		logger.Error("send connack error, ", err)
 		return
 	}
-	logger.Debugf("cluster ProcessConnect clientId:%s", client.GetId())
-	client.SetId(clientId)
-	p.s.Clusters().Store(clientId, client)
 }
 
 func (p *Processor) ProcessMessage(client ifs.Client, cp packets.ControlPacket) {
