@@ -146,7 +146,7 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster *config.ClusterNode
 	wg.Done()
 }
 
-//When two cluster nodes are connected, topics that need to be synchronized
+// when two cluster nodes are reconnected, topics that need to be synchronized
 func (c *Cluster) SyncTopics() {
 	wg := sync.WaitGroup{}
 	for _, cluster := range config.Clusters() {
