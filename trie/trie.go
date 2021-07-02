@@ -67,12 +67,12 @@ func (t *Trie) Unsubscribe(topic string, identity string) (exist bool) {
 	return
 }
 
-func (t *Trie) Subscribers(topic string) []interface{} {
-	subscribers := make([]interface{}, 0)
+func (t *Trie) Subscribers(topic string) map[string][]interface{} {
+	subscribers := make(map[string][]interface{})
 	leaf, ok := t.foliage.Load(topic)
 	if ok {
 		for _, subscriber := range leaf.(*Leaf).Subscribers() {
-			subscribers = append(subscribers, subscriber)
+			subscribers[topic] = append(subscribers[topic], subscriber)
 		}
 	}
 
@@ -86,9 +86,9 @@ func (t *Trie) Subscribers(topic string) []interface{} {
 
 	for _, branch := range t.root.GetBranches() {
 		leaves := branch.SearchLeaves(topic, keys, index)
-		for _, leaf := range leaves {
+		for topic, leaf := range leaves {
 			for _, subscriber := range leaf.Subscribers() {
-				subscribers = append(subscribers, subscriber)
+				subscribers[topic] = append(subscribers[topic], subscriber)
 			}
 		}
 	}

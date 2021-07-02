@@ -17,9 +17,10 @@ func NewProcessor(server ifs.Server) *Processor {
 }
 
 func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
-	subs := p.s.BrokerTopics().Subscribers(topic)
-	for _, sub := range subs {
-		if sub != nil {
+	subMap := p.s.BrokerTopics().Subscribers(topic)
+	for subTopic, subs := range subMap {
+		for _, sub := range subs {
+			packet.TopicName = subTopic
 			sub.(ifs.Client).WritePacket(packet)
 		}
 	}
@@ -40,12 +41,12 @@ func (p *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.Unsubs
 	topics := packet.Topics
 	unsuback := packets.NewControlPacket(packets.Unsuback).(*packets.UnsubackPacket)
 	unsuback.MessageID = packet.MessageID
+	client.WritePacket(unsuback)
 
 	for _, topic := range topics {
 		p.s.ClusterTopics().Unsubscribe(topic, client.GetId())
 		client.RemoveTopic(topic)
 	}
-	client.WritePacket(unsuback)
 }
 
 func (p *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {

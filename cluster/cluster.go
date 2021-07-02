@@ -124,12 +124,11 @@ func (c *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
 		exist, ok := c.s.Clusters().Load(clientId)
-		logger.Debugf("CheckHealthy clientId:%s, ok:%t", clientId, ok)
+		//logger.Debugf("CheckHealthy clientId:%s, ok:%t", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
 			go c.StartClient(&cluster)
 		} else if exist.(*Client).GetTyp() == config.TypClient {
-			logger.Debugf("CheckHealthy write PingreqPacket conn:%+v", exist)
 			ping := packets.NewControlPacket(packets.Pingreq).(*packets.PingreqPacket)
 			exist.(*Client).WritePacket(ping)
 		}

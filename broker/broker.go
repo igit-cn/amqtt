@@ -98,9 +98,9 @@ func (b *Broker) publishState() {
 		"$SYS/broker/timestamp":                 strconv.FormatInt(time.Now().Unix(), 10),
 	}
 	for topic, msg := range topics {
-		brokerSubs := b.s.BrokerTopics().Subscribers(topic)
-		for _, sub := range brokerSubs {
-			if sub != nil {
+		subMap := b.s.BrokerTopics().Subscribers(topic)
+		for _, subs := range subMap {
+			for _, sub := range subs {
 				packet := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
 				packet.Retain = false
 				packet.Payload = []byte(msg)
@@ -127,8 +127,8 @@ func (b *Broker) StartTcp() {
 	var tcpListener net.Listener
 	var err error
 
-	b.ticker = time.NewTicker(StateGapSec * time.Second)
-	go b.StartStateLoop()
+	// b.ticker = time.NewTicker(StateGapSec * time.Second)
+	// go b.StartStateLoop()
 
 	if !config.IsTcpTsl() {
 		tcpListener, err = net.Listen("tcp", tcpHost)

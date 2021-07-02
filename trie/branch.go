@@ -29,12 +29,8 @@ func (b *Branch) GetBranches() map[string]*Branch {
 	return b.branches
 }
 
-func (b *Branch) GetLeaves() []*Leaf {
-	leaves := make([]*Leaf, 0)
-	for _, v := range b.leaves {
-		leaves = append(leaves, v)
-	}
-	return leaves
+func (b *Branch) GetLeaves() map[string]*Leaf {
+	return b.leaves
 }
 
 func (b *Branch) AddBranch(topic string, identity string, subscriber interface{}, keys []string, index int) (exist bool) {
@@ -178,15 +174,18 @@ func (b *Branch) SearchRetain(topic string, keys []string, index int) []interfac
 	return retains
 }
 
-func (b *Branch) SearchLeaves(topic string, keys []string, index int) []*Leaf {
-	leaves := make([]*Leaf, 0)
+func (b *Branch) SearchLeaves(topic string, keys []string, index int) map[string]*Leaf {
+	leaves := make(map[string]*Leaf)
 	if b.name == "#" {
 		return b.GetLeaves()
 	} else if index+1 == len(keys) && (b.name == "+" || b.name == keys[index]) {
 		return b.GetLeaves()
 	} else if b.name == "+" || b.name == keys[index] {
 		for _, branch := range b.branches {
-			leaves = append(leaves, branch.SearchLeaves(topic, keys, index+1)...)
+			subLeaves := branch.SearchLeaves(topic, keys, index+1)
+			for k, v := range subLeaves {
+				leaves[k] = v
+			}
 		}
 	}
 	return leaves

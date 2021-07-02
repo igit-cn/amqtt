@@ -73,22 +73,29 @@ func (p *Processor) isQos2MsgFull() bool {
 }
 
 func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
-	// logger.Debugf("DoPublish topic:%s, packet:%+v", topic, packet)
 	brokerSubs := p.s.BrokerTopics().Subscribers(topic)
 	atomic.AddInt64(&p.s.State().PubRecv, 1)
-	for _, sub := range brokerSubs {
-		if sub != nil {
-			// logger.Debugf("DoPublish sub c:%s", sub.(ifs.Client).GetId())
+	for topic, subs := range brokerSubs {
+		newPacket := packet.Copy()
+		newPacket.TopicName = topic
+		for _, sub := range subs {
 			atomic.AddInt64(&p.s.State().PubSent, 1)
-			p.WritePacket(sub.(ifs.Client), packet)
+			p.WritePacket(sub.(ifs.Client), newPacket)
 		}
 	}
 
 	clusterSubs := p.s.ClusterTopics().Subscribers(topic)
-	for _, sub := range clusterSubs {
-		if sub != nil {
-			sub.(ifs.Client).WritePacket(packet)
+	clusters := make(map[string]ifs.Client)
+
+	//a message is only sent to one cluster node once, here to remove the duplicate
+	for _, subs := range clusterSubs {
+		for _, sub := range subs {
+			client := sub.(ifs.Client)
+			clusters[client.GetId()] = client
 		}
+	}
+	for _, client := range clusters {
+		client.WritePacket(packet)
 	}
 }
 
@@ -142,6 +149,7 @@ func (p *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.Unsubs
 	topics := packet.Topics
 	unsuback := packets.NewControlPacket(packets.Unsuback).(*packets.UnsubackPacket)
 	unsuback.MessageID = packet.MessageID
+	p.WritePacket(client, unsuback)
 
 	for _, topic := range topics {
 		client.RemoveTopic(topic)
@@ -150,7 +158,11 @@ func (p *Processor) ProcessUnSubscribe(client ifs.Client, packet *packets.Unsubs
 			atomic.AddInt64(&p.s.State().SubCount, -1)
 		}
 	}
-	p.WritePacket(client, unsuback)
+
+	p.s.Clusters().Range(func(k, v interface{}) bool {
+		v.(ifs.Client).WritePacket(packet)
+		return true
+	})
 }
 
 func (p *Processor) ProcessSubscribe(client ifs.Client, packet *packets.SubscribePacket) {
@@ -260,7 +272,6 @@ func (p *Processor) WritePacket(client ifs.Client, packet packets.ControlPacket)
 		logger.Error("write packet error, ", err)
 		return err
 	}
-	// logger.Debugf("Processor writePacket size:%d", packet.Size())
 	atomic.AddInt64(&p.s.State().MsgSent, 1)
 	atomic.AddInt64(&p.s.State().BytesSent, int64(packet.Size()))
 	return nil
