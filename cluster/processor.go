@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"sync/atomic"
+
 	"github.com/werbenhu/amqtt/ifs"
 	"github.com/werbenhu/amqtt/logger"
 	"github.com/werbenhu/amqtt/packets"
@@ -25,6 +27,7 @@ func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 		if !history[client.GetId()] {
 			history[client.GetId()] = true
 			client.WritePacket(packet)
+			atomic.AddInt64(&p.s.State().PubSent, 1)
 		}
 	}
 }

@@ -83,6 +83,7 @@ func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 		if !brokerHistory[client.GetId()] {
 			brokerHistory[client.GetId()] = true
 			client.WritePacket(packet)
+			atomic.AddInt64(&p.s.State().PubSent, 1)
 		}
 	}
 

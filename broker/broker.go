@@ -3,10 +3,13 @@ package broker
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/werbenhu/amqtt/config"
@@ -56,14 +59,14 @@ func (b *Broker) Handler(conn net.Conn, typ int) {
 }
 
 func (b *Broker) StartWebsocket() {
-	http.Handle("/"+config.WsPath(), websocket.Handler(func(conn *websocket.Conn) {
+	http.Handle(config.WsPath(), websocket.Handler(func(conn *websocket.Conn) {
 		conn.PayloadType = websocket.BinaryFrame
 		b.Handler(conn, config.TypWs)
 	}))
 	var err error
-	if config.IsWsTsl() {
+	if config.WsTls() {
 		fmt.Printf("start broker websocket listen to %s and tls is on ...\n", config.WsHost())
-		err = http.ListenAndServeTLS(config.WsHost(), config.CaFile(), config.CeKey(), nil)
+		err = http.ListenAndServeTLS(config.WsHost(), config.CertFile(), config.KeyFile(), nil)
 	} else {
 		fmt.Printf("start broker websocket listen to %s ...\n", config.WsHost())
 		err = http.ListenAndServe(config.WsHost(), nil)
@@ -110,6 +113,7 @@ func (b *Broker) publishState() {
 				packet.Payload = []byte(msg)
 				packet.TopicName = topic
 				b.processor.WritePacket(client, packet)
+				atomic.AddInt64(&b.s.State().PubSent, 1)
 			}
 		}
 	}
@@ -134,19 +138,33 @@ func (b *Broker) StartTcp() {
 	b.ticker = time.NewTicker(StateGapSec * time.Second)
 	go b.StartStateLoop()
 
-	if !config.IsTcpTsl() {
+	if !config.TcpTls() {
 		tcpListener, err = net.Listen("tcp", tcpHost)
 		if err != nil {
 			logger.Fatalf("tcp listen to %s Err:%s\n", tcpHost, err)
 		}
 		fmt.Printf("start broker tcp listen to %s ...\n", tcpHost)
 	} else {
-		cert, err := tls.LoadX509KeyPair(config.CaFile(), config.CeKey())
+		cert, err := tls.LoadX509KeyPair(config.CertFile(), config.KeyFile())
 		if err != nil {
-			logger.Fatalf("tcp LoadX509KeyPair ce file: %s Err:%s\n", config.CaFile(), err)
+			logger.Fatalf("tcp LoadX509KeyPair cert file: %s Err:%s\n", config.CertFile(), err)
 		}
+
+		ca, err := ioutil.ReadFile(config.Ca())
+		if err != nil {
+			logger.Fatalf("broker unable to read root cert file")
+		}
+		caPool := x509.NewCertPool()
+		caPool.AppendCertsFromPEM(ca)
+		if !caPool.AppendCertsFromPEM(ca) {
+			logger.Fatalf("broker add cert pool err")
+		}
+
 		tcpListener, err = tls.Listen("tcp", tcpHost, &tls.Config{
-			Certificates: []tls.Certificate{cert},
+			Certificates:       []tls.Certificate{cert},
+			ClientCAs:          caPool,
+			InsecureSkipVerify: false,
+			ClientAuth:         tls.RequireAndVerifyClientCert,
 		})
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s\n", tcpHost, err)

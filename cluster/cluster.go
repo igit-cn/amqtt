@@ -3,7 +3,9 @@ package cluster
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"strings"
 	"sync"
@@ -62,24 +64,38 @@ func (c *Cluster) StartServer() {
 	var tcpListener net.Listener
 	var err error
 
-	if !config.IsClusterTsl() {
-		tcpListener, err = net.Listen("tcp", tcpHost)
+	if config.ClusterTls() {
+		cert, err := tls.LoadX509KeyPair(config.CertFile(), config.KeyFile())
 		if err != nil {
-			logger.Fatalf("tcp listen to %s Err:%s", tcpHost, err)
+			logger.Fatalf("tcp LoadX509KeyPair ce file: %s Err:%s", config.CertFile(), err)
 		}
-		fmt.Printf("start cluster tcp listen to %s ...\n", tcpHost)
-	} else {
-		cert, err := tls.LoadX509KeyPair(config.CaFile(), config.CeKey())
+
+		var ca []byte
+		ca, err = ioutil.ReadFile(config.Ca())
 		if err != nil {
-			logger.Fatalf("tcp LoadX509KeyPair ce file: %s Err:%s", config.CaFile(), err)
+			logger.Fatalf("cluster server unable to read root cert file")
 		}
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(ca) {
+			logger.Fatalf("cluster server add cert Pool err")
+		}
+
 		tcpListener, err = tls.Listen("tcp", tcpHost, &tls.Config{
-			Certificates: []tls.Certificate{cert},
+			Certificates:       []tls.Certificate{cert},
+			ClientCAs:          caPool,
+			InsecureSkipVerify: false,
+			ClientAuth:         tls.RequireAndVerifyClientCert,
 		})
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s", tcpHost, err)
 		}
 		fmt.Printf("start cluster tcp listen to %s and tls is on ...\n", tcpHost)
+	} else {
+		tcpListener, err = net.Listen("tcp", tcpHost)
+		if err != nil {
+			logger.Fatalf("tcp listen to %s Err:%s", tcpHost, err)
+		}
+		fmt.Printf("start cluster tcp listen to %s ...\n", tcpHost)
 	}
 
 	for {
@@ -121,8 +137,41 @@ func (c *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 }
 
 func (c *Cluster) StartClient(cluster *config.ClusterNode) {
-	logger.Infof("Cluster start connect to %s", cluster.Name)
-	conn, err := net.DialTimeout("tcp", cluster.Host, 60*time.Second)
+	var err error
+	var conn net.Conn
+
+	if config.ClusterTls() {
+		logger.Infof("Cluster start connect to %s with tls on...", cluster.Name)
+		var cert tls.Certificate
+		cert, err = tls.LoadX509KeyPair(config.ClientCertFile(), config.ClientKeyFile())
+		if err != nil {
+			logger.Fatalf("cluster client LoadX509KeyPair cert file: %s Err:%s\n", config.CertFile(), err)
+		}
+
+		var ca []byte
+		ca, err = ioutil.ReadFile(config.Ca())
+		if err != nil {
+			logger.Fatalf("cluster client unable to read root cert file")
+		}
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(ca) {
+			logger.Fatalf("cluster client add cert Pool err")
+		}
+		tlsConfig := &tls.Config{
+			RootCAs:      caPool,
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.NoClientCert,
+			ClientCAs:    nil,
+			//InsecureSkipVerify controls whether a client verifies the server's certificate chain and host name.
+			InsecureSkipVerify: true,
+		}
+
+		conn, err = tls.Dial("tcp", cluster.Host, tlsConfig)
+	} else {
+		logger.Infof("Cluster start connect to %s ...", cluster.Name)
+		conn, err = net.DialTimeout("tcp", cluster.Host, 60*time.Second)
+	}
+
 	if err != nil {
 		logger.Errorf("Cluster fail to connect to %s Err:%s", cluster.Host, err.Error())
 		return
@@ -147,11 +196,10 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster *config.ClusterNode
 	wg.Done()
 }
 
-// when two cluster nodes are reconnected, topics that need to be synchronized
+// when two cluster nodes are reconnected, topics that need to synchronize
 func (c *Cluster) SyncTopics() {
 	wg := sync.WaitGroup{}
 	for _, cluster := range config.Clusters() {
-		logger.Debugf("SyncTopics cluster:%+v", cluster)
 		wg.Add(1)
 		go c.syncNodeTopics(&wg, &cluster)
 	}

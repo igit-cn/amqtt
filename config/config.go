@@ -15,21 +15,27 @@ type ClusterNode struct {
 }
 
 type Config struct {
-	TcpHost     string
-	TcpPort     int
-	TcpTsl      bool
-	Websocket   bool
-	WsHost      string
-	WsPort      int
-	WsPath      string
-	WsTsl       bool
-	CaFile      string
-	CeKey       string
+	TcpHost string
+	TcpPort int
+	TcpTls  bool
+
+	Websocket bool
+	WsHost    string
+	WsPort    int
+	WsPath    string
+	WsTls     bool
+
+	Ca             string
+	CertFile       string
+	KeyFile        string
+	ClientCertFile string
+	ClientKeyFile  string
+
 	IsCluster   bool
 	ClusterName string
 	ClusterHost string
 	ClusterPort int
-	ClusterTsl  bool
+	ClusterTls  bool
 
 	Clusters []ClusterNode
 }
@@ -46,16 +52,43 @@ func init() {
 func Configure(args []string) error {
 	fs := flag.NewFlagSet("amqtt", flag.ExitOnError)
 
-	fs.IntVar(&cfg.TcpPort, "p", cfg.TcpPort, "broker tcp port to listen on.")
+	var configFile string
+	fs.StringVar(&configFile, "c", "", "the config file path.")
+
+	fs.IntVar(&cfg.TcpPort, "port", cfg.TcpPort, "broker tcp port to listen on.")
 	fs.StringVar(&cfg.TcpHost, "host", cfg.TcpHost, "broker tcp host to listen on.")
+
+	fs.BoolVar(&cfg.TcpTls, "tls", cfg.ClusterTls, "whether broker tcp use tls")
+	fs.StringVar(&cfg.Ca, "ca", cfg.Ca, "path of tls root ca file.")
+	fs.StringVar(&cfg.CertFile, "certfile", cfg.CertFile, "path of tls server cert file.")
+	fs.StringVar(&cfg.KeyFile, "keyfile", cfg.KeyFile, "path of tls server key file.")
+
 	fs.IntVar(&cfg.ClusterPort, "cp", cfg.ClusterPort, "cluster tcp port to listen on.")
 	fs.StringVar(&cfg.ClusterHost, "ch", cfg.ClusterHost, "cluster tcp host to listen on.")
-	clusters := *fs.String("clusters", "", "other node of this cluster. e.g., \"node2//host:port,node3//host:port\"")
+	fs.BoolVar(&cfg.ClusterTls, "cluster-tls", cfg.ClusterTls, "whether cluster tcp use tls")
+
+	fs.StringVar(&cfg.ClientCertFile, "client-certfile", cfg.ClientCertFile, "path of tls client cert file.")
+	fs.StringVar(&cfg.ClientKeyFile, "client-keyfile", cfg.ClientKeyFile, "path of tls client key file.")
+
+	fs.BoolVar(&cfg.IsCluster, "cluster", cfg.IsCluster, "whether to open cluster mode.")
+	fs.StringVar(&cfg.ClusterName, "name", cfg.ClusterName, "current node name of the cluster.")
+	clusters := *fs.String("clusters", "", "other nodes of this cluster. e.g., \"node2//host:port,node3//host:port\"")
+
 	fs.BoolVar(&cfg.Websocket, "ws", cfg.Websocket, "whether to open websocket")
-	fs.StringVar(&cfg.ClusterName, "name", cfg.ClusterName, "cluster node name.")
+	fs.BoolVar(&cfg.Websocket, "ws-tls", cfg.WsTls, "whether websocket use tls")
+	fs.StringVar(&cfg.WsPath, "ws-path", cfg.WsPath, "websocket server path. e.g., \"/mqtt\"")
+	fs.IntVar(&cfg.WsPort, "ws-port", cfg.WsPort, "websocket port to listen on.")
+	fs.StringVar(&cfg.WsHost, "ws-host", cfg.WsHost, "websocket host to listen on.")
 
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if configFile != "" {
+		if _, err := toml.DecodeFile(configFile, &cfg); err != nil {
+			log.Fatalf("read %s Err:%s\n", configFile, err)
+			return nil
+		}
 	}
 
 	if clusters != "" {
@@ -107,26 +140,38 @@ func IsCluster() bool {
 	return cfg.IsCluster
 }
 
-func CaFile() string {
-	return cfg.CaFile
+func Ca() string {
+	return cfg.Ca
+}
+
+func CertFile() string {
+	return cfg.CertFile
+}
+
+func KeyFile() string {
+	return cfg.KeyFile
+}
+
+func ClientCertFile() string {
+	return cfg.ClientCertFile
+}
+
+func ClientKeyFile() string {
+	return cfg.ClientKeyFile
 }
 
 func WsPath() string {
 	return cfg.WsPath
 }
 
-func CeKey() string {
-	return cfg.CeKey
+func TcpTls() bool {
+	return cfg.TcpTls
 }
 
-func IsTcpTsl() bool {
-	return cfg.TcpTsl
+func WsTls() bool {
+	return cfg.WsTls
 }
 
-func IsWsTsl() bool {
-	return cfg.WsTsl
-}
-
-func IsClusterTsl() bool {
-	return cfg.ClusterTsl
+func ClusterTls() bool {
+	return cfg.ClusterTls
 }
