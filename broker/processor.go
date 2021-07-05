@@ -76,27 +76,24 @@ func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 	brokerSubs := p.s.BrokerTopics().Subscribers(topic)
 	atomic.AddInt64(&p.s.State().PubRecv, 1)
 
-	for topic, subs := range brokerSubs {
-		newPacket := packet.Copy()
-		newPacket.TopicName = topic
-		for _, sub := range subs {
-			atomic.AddInt64(&p.s.State().PubSent, 1)
-			p.WritePacket(sub.(ifs.Client), newPacket)
+	//a message is only sent to a client once, here to remove the duplicate
+	brokerHistory := make(map[string]bool)
+	for _, sub := range brokerSubs {
+		client := sub.(ifs.Client)
+		if !brokerHistory[client.GetId()] {
+			brokerHistory[client.GetId()] = true
+			client.WritePacket(packet)
 		}
 	}
 
 	clusterSubs := p.s.ClusterTopics().Subscribers(topic)
-	clusters := make(map[string]ifs.Client)
-
-	//a message is only sent to one cluster node once, here to remove the duplicate
-	for _, subs := range clusterSubs {
-		for _, sub := range subs {
-			client := sub.(ifs.Client)
-			clusters[client.GetId()] = client
+	clusterrHistory := make(map[string]bool)
+	for _, sub := range clusterSubs {
+		client := sub.(ifs.Client)
+		if !clusterrHistory[client.GetId()] {
+			clusterrHistory[client.GetId()] = true
+			client.WritePacket(packet)
 		}
-	}
-	for _, client := range clusters {
-		client.WritePacket(packet)
 	}
 }
 

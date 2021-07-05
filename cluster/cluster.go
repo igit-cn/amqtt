@@ -137,8 +137,9 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster *config.ClusterNode
 	if ok {
 		c.s.BrokerTopics().RangeTopics(func(topic, client interface{}) bool {
 			logger.Debugf("syncNodeTopics cluster:%+v, topic:%s", cluster, topic)
-			subpack := packets.NewControlPacket(packets.Pingreq).(*packets.SubscribePacket)
+			subpack := packets.NewControlPacket(packets.Subscribe).(*packets.SubscribePacket)
 			subpack.Topics = []string{topic.(string)}
+			subpack.Qoss = []byte{0}
 			exist.(*Client).WritePacket(subpack)
 			return true
 		})
@@ -150,6 +151,7 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster *config.ClusterNode
 func (c *Cluster) SyncTopics() {
 	wg := sync.WaitGroup{}
 	for _, cluster := range config.Clusters() {
+		logger.Debugf("SyncTopics cluster:%+v", cluster)
 		wg.Add(1)
 		go c.syncNodeTopics(&wg, &cluster)
 	}
@@ -160,6 +162,7 @@ func (c *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
 		exist, ok := c.s.Clusters().Load(clientId)
+		logger.Debugf("CheckHealthy clientId:%s, ok:%v", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
 			go c.StartClient(&cluster)

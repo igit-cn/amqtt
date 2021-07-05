@@ -19,6 +19,13 @@ type Trie struct {
 }
 
 func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) (exist bool) {
+
+	leaf, ok := t.foliage.Load(topic)
+	if !ok {
+		leaf = NewLeaf(nil)
+		t.foliage.Store(topic, leaf)
+	}
+
 	if strings.Contains(topic, "#") || strings.Contains(topic, "+") {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -28,12 +35,6 @@ func (t *Trie) Subscribe(topic string, identity string, subscriber interface{}) 
 			index = 1
 		}
 		return t.root.AddBranch(topic, identity, subscriber, keys, index)
-	}
-
-	leaf, ok := t.foliage.Load(topic)
-	if !ok {
-		leaf = NewLeaf(nil)
-		t.foliage.Store(topic, leaf)
 	}
 	return leaf.(*Leaf).AddSubscriber(identity, subscriber)
 }
@@ -71,9 +72,9 @@ func (t *Trie) RangeTopics(f func(topic, client interface{}) bool) {
 	t.foliage.Range(f)
 }
 
-func (t *Trie) Subscribers(topic string) map[string][]interface{} {
+func (t *Trie) Subscribers(topic string) []interface{} {
 
-	subscribers := make(map[string][]interface{})
+	subscribers := make([]interface{}, 0)
 	if strings.Contains(topic, "#") || strings.Contains(topic, "+") {
 		return subscribers
 	}
@@ -81,7 +82,7 @@ func (t *Trie) Subscribers(topic string) map[string][]interface{} {
 	leaf, ok := t.foliage.Load(topic)
 	if ok {
 		for _, subscriber := range leaf.(*Leaf).Subscribers() {
-			subscribers[topic] = append(subscribers[topic], subscriber)
+			subscribers = append(subscribers, subscriber)
 		}
 	}
 
@@ -95,9 +96,9 @@ func (t *Trie) Subscribers(topic string) map[string][]interface{} {
 
 	for _, branch := range t.root.GetBranches() {
 		leaves := branch.SearchLeaves(topic, keys, index)
-		for topic, leaf := range leaves {
+		for _, leaf := range leaves {
 			for _, subscriber := range leaf.Subscribers() {
-				subscribers[topic] = append(subscribers[topic], subscriber)
+				subscribers = append(subscribers, subscriber)
 			}
 		}
 	}

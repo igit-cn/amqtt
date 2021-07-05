@@ -17,11 +17,14 @@ func NewProcessor(server ifs.Server) *Processor {
 }
 
 func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
-	subMap := p.s.BrokerTopics().Subscribers(topic)
-	for subTopic, subs := range subMap {
-		for _, sub := range subs {
-			packet.TopicName = subTopic
-			sub.(ifs.Client).WritePacket(packet)
+	subs := p.s.BrokerTopics().Subscribers(topic)
+	history := make(map[string]bool)
+	for _, sub := range subs {
+		client := sub.(ifs.Client)
+		//a message is only sent to a client once, here to remove the duplicate
+		if !history[client.GetId()] {
+			history[client.GetId()] = true
+			client.WritePacket(packet)
 		}
 	}
 }

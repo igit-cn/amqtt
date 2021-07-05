@@ -98,14 +98,18 @@ func (b *Broker) publishState() {
 		"$SYS/broker/timestamp":                 strconv.FormatInt(time.Now().Unix(), 10),
 	}
 	for topic, msg := range topics {
-		subMap := b.s.BrokerTopics().Subscribers(topic)
-		for subTopic, subs := range subMap {
-			for _, sub := range subs {
+		subs := b.s.BrokerTopics().Subscribers(topic)
+		history := make(map[string]bool)
+		for _, sub := range subs {
+			client := sub.(ifs.Client)
+			//a message is only sent to a client once, here to remove the duplicate
+			if !history[client.GetId()] {
+				history[client.GetId()] = true
 				packet := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
 				packet.Retain = false
 				packet.Payload = []byte(msg)
-				packet.TopicName = subTopic
-				b.processor.WritePacket(sub.(ifs.Client), packet)
+				packet.TopicName = topic
+				b.processor.WritePacket(client, packet)
 			}
 		}
 	}
