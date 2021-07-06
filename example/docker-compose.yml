@@ -1,9 +1,9 @@
 version: '3'
 services:
-  golang:
-    image: "amqtt"
-    container_name: amqtt
-    build: ./amqtt
+
+  node1:
+    image: "werbenhu/amqtt:latest"
+    container_name: node1
     restart: always
     ports:
       - "1884:1884"
@@ -12,9 +12,40 @@ services:
     environment:
       - CONFIG=/go/amqtt.toml
     volumes:
-      - ./conf.toml:/go/amqtt.toml
+      - ./node1.toml:/go/amqtt.toml
     networks:
       - default
+
+  node2:
+    image: "werbenhu/amqtt:latest"
+    container_name: node2
+    restart: always
+    ports:
+      - "1885:1884"
+      - "8087:8086"
+      - "2885:2884"
+    environment:
+      - CONFIG=/go/amqtt.toml
+    volumes:
+      - ./node2.toml:/go/amqtt.toml
+    networks:
+      - default
+
+  node3:
+    image: "werbenhu/amqtt:latest"
+    container_name: node3
+    restart: always
+    ports:
+      - "1886:1884"
+      - "8088:8086"
+      - "2886:2884"
+    environment:
+      - CONFIG=/go/amqtt.toml
+    volumes:
+      - ./node3.toml:/go/amqtt.toml
+    networks:
+      - default
+
 networks:
   default:
     external:

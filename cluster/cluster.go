@@ -109,7 +109,7 @@ func (c *Cluster) StartServer() {
 	}
 }
 
-func (c *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
+func (c *Cluster) HandlerClient(conn net.Conn, cluster config.ClusterNode) {
 	connect := packets.NewControlPacket(packets.Connect).(*packets.ConnectPacket)
 	connect.ProtocolName = "MQTT"
 	connect.ProtocolVersion = 4
@@ -136,7 +136,7 @@ func (c *Cluster) HandlerClient(conn net.Conn, cluster *config.ClusterNode) {
 	client.ReadLoop(c.processor)
 }
 
-func (c *Cluster) StartClient(cluster *config.ClusterNode) {
+func (c *Cluster) StartClient(cluster config.ClusterNode) {
 	var err error
 	var conn net.Conn
 
@@ -180,7 +180,7 @@ func (c *Cluster) StartClient(cluster *config.ClusterNode) {
 	}
 }
 
-func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster *config.ClusterNode) {
+func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster config.ClusterNode) {
 	clientId := strings.TrimSpace(cluster.Name)
 	exist, ok := c.s.Clusters().Load(clientId)
 	if ok {
@@ -201,7 +201,9 @@ func (c *Cluster) SyncTopics() {
 	wg := sync.WaitGroup{}
 	for _, cluster := range config.Clusters() {
 		wg.Add(1)
-		go c.syncNodeTopics(&wg, &cluster)
+		func(wg *sync.WaitGroup, cluster config.ClusterNode) {
+			go c.syncNodeTopics(wg, cluster)
+		}(&wg, cluster)
 	}
 	wg.Wait()
 }
@@ -213,7 +215,9 @@ func (c *Cluster) CheckHealthy() {
 		logger.Debugf("CheckHealthy clientId:%s, ok:%v", clientId, ok)
 		if !ok {
 			logger.Debugf("reconnect clientId:%s", clientId)
-			go c.StartClient(&cluster)
+			func(cluster config.ClusterNode) {
+				go c.StartClient(cluster)
+			}(cluster)
 		} else if exist.(*Client).GetTyp() == config.TypClient {
 			ping := packets.NewControlPacket(packets.Pingreq).(*packets.PingreqPacket)
 			exist.(*Client).WritePacket(ping)

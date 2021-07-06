@@ -1,0 +1,30 @@
+tcpHost = "0.0.0.0"
+tcpPort = 1884
+tcpTls = false
+
+ca = "certs/root.crt"
+certFile = "certs/server.crt"
+keyFile = "certs/server.key"
+
+clientCertFile = "certs/client.crt"
+clientKeyFile = "certs/client.key"
+
+websocket = false
+wsHost = "0.0.0.0"
+wsPort = 8086
+wsTls = false
+wsPath = "/mqtt"
+
+isCluster = true
+clusterName = "node3"
+clusterHost = "0.0.0.0"
+clusterPort = 2884
+clusterTls = true
+
+[[clusters]]
+name = "node1"
+host = "node1:2884"
+
+[[clusters]]
+name = "node2"
+host = "node2:2884"

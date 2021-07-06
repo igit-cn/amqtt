@@ -1,6 +1,6 @@
 tcpHost = "0.0.0.0"
 tcpPort = 1884
-tcpTls = true
+tcpTls = false
 
 ca = "certs/root.crt"
 certFile = "certs/server.crt"
@@ -9,7 +9,7 @@ keyFile = "certs/server.key"
 clientCertFile = "certs/client.crt"
 clientKeyFile = "certs/client.key"
 
-websocket = true
+websocket = false
 wsHost = "0.0.0.0"
 wsPort = 8086
 wsTls = true
@@ -23,4 +23,8 @@ clusterTls = true
 
 [[clusters]]
 name = "node2"
-host = "localhost:2885"
+host = "node2:2884"
+
+[[clusters]]
+name = "node3"
+host = "node3:2884"
