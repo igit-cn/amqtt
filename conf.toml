@@ -1,26 +1,53 @@
+# broker 监听的IP地址
 tcpHost = "0.0.0.0"
+# broker 监听的端口
 tcpPort = 1884
+# 是否开启tls
 tcpTls = false
 
+# 根证书
 ca = "certs/root.crt"
+# 服务器端证书
 certFile = "certs/server.crt"
+# 服务器端秘钥
 keyFile = "certs/server.key"
 
+# 客户端证书，如果集群节点通信开启了tls时需要使用
 clientCertFile = "certs/client.crt"
+# 客户端秘钥
 clientKeyFile = "certs/client.key"
 
+# 是否开启websocket
 websocket = false
+# 开启websocket监听的IP
 wsHost = "0.0.0.0"
+# 开启websocket监听的端口
 wsPort = 8086
+# websocket是否启用tls
 wsTls = false
+# websocket的path
 wsPath = "/mqtt"
 
+# 是否开启集群模式
 isCluster = false
+# 当前节点再集群中的名称，必须保证每个节点的名称都不一样
 clusterName = "node1"
+# 集群模式监听的IP，用来和集群中其他节点通信
 clusterHost = "0.0.0.0"
+# 集群模式监听的端口
 clusterPort = 2884
+# 集群模式是否使用tls
 clusterTls = false
 
+# 集群中的其他的节点
 [[clusters]]
+# 其他节点的名称，必须唯一
 name = "node2"
+# 其他节点的监听的ip和端口，必须唯一
+host = "127.0.0.1:8882"
+
+[[clusters]]
+# 其他节点的名称，必须唯一
+name = "node2"
+# 其他节点的监听的ip和端口，必须唯一
 host = "127.0.0.1:8882"

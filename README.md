@@ -15,8 +15,13 @@ docker pull werbenhu/amqtt:latest
 docker run -d -p 1884:1884 --name amqtt werbenhu/amqtt 
 ```
 
+指定配置文件, 关于配置文件，参考 [conf.toml][1]
+```
+docker run -d -p 1884:1884 -v ./conf.toml:/go/amqtt.toml -e CONFIG="/go/amqtt.toml" --name amqtt werbenhu/amqtt
+```
+
 ## 3.集群模式
-请参考[examples][1]
+请参考[examples][2]
 
 
 ## 4.性能测试
@@ -32,7 +37,7 @@ MemTotal: 32708532 kB
 
 测试工具：
 
-使用的 [inovex/mqtt-stresser][2]，这里采用的是非集群模式单节点测试，只测试跟mosquitto的对比。
+使用的 [inovex/mqtt-stresser][3]，这里采用的是非集群模式单节点测试，只测试跟mosquitto的对比。
 
  - 1个客户端，每客户端发10000条消息
 
@@ -77,5 +82,7 @@ MemTotal: 32708532 kB
 | Rece Slowest	| 330 msg/sec |	146 msg/sec |
 | Rece Median |	458 msg/sec	| 190 msg/sec |
 
-  [1]: https://github.com/werbenhu/amqtt/tree/master/example
-  [2]: https://github.com/inovex/mqtt-stresser
+
+  [1]: https://github.com/werbenhu/amqtt/blob/master/conf.toml
+  [2]: https://github.com/werbenhu/amqtt/tree/master/example
+  [3]: https://github.com/inovex/mqtt-stresser
