@@ -88,13 +88,13 @@ func (c *Cluster) StartServer() {
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s", tcpHost, err)
 		}
-		logger.Info("start cluster tcp listen to %s and tls is on ...\n", tcpHost)
+		logger.Infof("start cluster tcp listen to %s and tls is on ...", tcpHost)
 	} else {
 		tcpListener, err = net.Listen("tcp", tcpHost)
 		if err != nil {
 			logger.Fatalf("tcp listen to %s Err:%s", tcpHost, err)
 		}
-		logger.Info("start cluster tcp listen to %s ...\n", tcpHost)
+		logger.Infof("start cluster tcp listen to %s ...", tcpHost)
 	}
 
 	for {
@@ -183,6 +183,7 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster config.ClusterNode)
 	clientId := strings.TrimSpace(cluster.Name)
 	exist, ok := c.s.Clusters().Load(clientId)
 	if ok {
+		logger.Infof("syncNodeTopics to cluster:%+v", cluster)
 		c.s.BrokerTopics().RangeTopics(func(topic, client interface{}) bool {
 			logger.Debugf("syncNodeTopics cluster:%+v, topic:%s", cluster, topic)
 			subpack := packets.NewControlPacket(packets.Subscribe).(*packets.SubscribePacket)
@@ -213,7 +214,7 @@ func (c *Cluster) CheckHealthy() {
 		exist, ok := c.s.Clusters().Load(clientId)
 		logger.Debugf("CheckHealthy clientId:%s, ok:%v", clientId, ok)
 		if !ok {
-			logger.Debugf("reconnect clientId:%s", clientId)
+			logger.Infof("connect to cluster:%+v", cluster)
 			func(cluster config.ClusterNode) {
 				go c.StartClient(cluster)
 			}(cluster)

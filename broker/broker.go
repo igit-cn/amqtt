@@ -64,10 +64,10 @@ func (b *Broker) StartWebsocket() {
 	}))
 	var err error
 	if config.WsTls() {
-		logger.Info("start broker websocket listen to %s and tls is on ...\n", config.WsHost())
+		logger.Infof("start broker websocket listen to %s and tls is on ...", config.WsHost())
 		err = http.ListenAndServeTLS(config.WsHost(), config.CertFile(), config.KeyFile(), nil)
 	} else {
-		logger.Info("start broker websocket listen to %s ...\n", config.WsHost())
+		logger.Infof("start broker websocket listen to %s ...", config.WsHost())
 		err = http.ListenAndServe(config.WsHost(), nil)
 	}
 	logger.Debug("StartWebsocket end")
@@ -142,7 +142,7 @@ func (b *Broker) StartTcp() {
 		if err != nil {
 			logger.Fatalf("tcp listen to %s Err:%s\n", tcpHost, err)
 		}
-		logger.Info("start broker tcp listen to %s ...\n", tcpHost)
+		logger.Infof("start broker tcp listen to %s ...", tcpHost)
 	} else {
 		cert, err := tls.LoadX509KeyPair(config.CertFile(), config.KeyFile())
 		if err != nil {
@@ -168,7 +168,7 @@ func (b *Broker) StartTcp() {
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s\n", tcpHost, err)
 		}
-		logger.Info("start broker tcp listen to %s and tls is on ...\n", tcpHost)
+		logger.Infof("start broker tcp listen to %s and tls is on ...", tcpHost)
 	}
 
 	for {
