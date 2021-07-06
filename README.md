@@ -1,4 +1,4 @@
-# Golang写的分布式MQTT Broker
+# 一个Golang实现的分布式MQTT Broker
 
 ## 1.特性
  - 目前仅支持mqtt 3.x 协议
