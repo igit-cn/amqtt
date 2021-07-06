@@ -43,18 +43,20 @@ func (c *Cluster) HandlerServer(conn net.Conn) {
 		logger.Error("received msg that was not connect")
 		return
 	}
-	client.SetId(cp.ClientIdentifier)
 
+	client.SetId(cp.ClientIdentifier)
 	clientId := cp.ClientIdentifier
 	if old, ok := c.s.Clusters().Load(clientId); ok {
-		logger.Debugf("cluster HandlerServer close old clientId:%s", client.GetId())
+		logger.Infof("cluster HandlerServer close old clientId:%s", client.GetId())
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
+
+	logger.Infof("cluster server receive connection from clientId:%s", client.GetId())
 	c.processor.ProcessConnect(client, cp)
 	client.SetId(clientId)
 	c.s.Clusters().Store(clientId, client)
-	c.SyncTopics()
+	c.SyncTopics(clientId)
 	client.ReadLoop(c.processor)
 }
 
@@ -85,10 +87,12 @@ func (c *Cluster) StartServer() {
 			InsecureSkipVerify: false,
 			ClientAuth:         tls.RequireAndVerifyClientCert,
 		})
+
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s", tcpHost, err)
 		}
 		logger.Infof("start cluster tcp listen to %s and tls is on ...", tcpHost)
+
 	} else {
 		tcpListener, err = net.Listen("tcp", tcpHost)
 		if err != nil {
@@ -125,13 +129,13 @@ func (c *Cluster) HandlerClient(conn net.Conn, cluster config.ClusterNode) {
 	}
 
 	if old, ok := c.s.Clusters().Load(cluster.Name); ok {
-		logger.Debugf("cluster HandlerClient close clientId:%s", client.GetId())
+		logger.Infof("cluster HandlerClient close clientId:%s", client.GetId())
 		oldClient := old.(ifs.Client)
 		oldClient.Close()
 	}
 	client.SetId(cluster.Name)
 	c.s.Clusters().Store(cluster.Name, client)
-	c.SyncTopics()
+	c.SyncTopics(cluster.Name)
 	client.ReadLoop(c.processor)
 }
 
@@ -140,7 +144,7 @@ func (c *Cluster) StartClient(cluster config.ClusterNode) {
 	var conn net.Conn
 
 	if config.ClusterTls() {
-		logger.Infof("Cluster start connect to %s with tls on...", cluster.Name)
+		logger.Infof("cluster client start connect to %+v with tls on...", cluster)
 		var cert tls.Certificate
 		cert, err = tls.LoadX509KeyPair(config.ClientCertFile(), config.ClientKeyFile())
 		if err != nil {
@@ -156,6 +160,7 @@ func (c *Cluster) StartClient(cluster config.ClusterNode) {
 		if !caPool.AppendCertsFromPEM(ca) {
 			logger.Fatalf("cluster client add cert Pool err")
 		}
+
 		tlsConfig := &tls.Config{
 			RootCAs:      caPool,
 			Certificates: []tls.Certificate{cert},
@@ -164,10 +169,10 @@ func (c *Cluster) StartClient(cluster config.ClusterNode) {
 			//InsecureSkipVerify controls whether a client verifies the server's certificate chain and host name.
 			InsecureSkipVerify: true,
 		}
-
 		conn, err = tls.Dial("tcp", cluster.Host, tlsConfig)
+
 	} else {
-		logger.Infof("Cluster start connect to %s ...", cluster.Name)
+		logger.Infof("cluster client start connect to %+v ...", cluster)
 		conn, err = net.DialTimeout("tcp", cluster.Host, 60*time.Second)
 	}
 
@@ -185,7 +190,6 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster config.ClusterNode)
 	if ok {
 		logger.Infof("syncNodeTopics to cluster:%+v", cluster)
 		c.s.BrokerTopics().RangeTopics(func(topic, client interface{}) bool {
-			logger.Debugf("syncNodeTopics cluster:%+v, topic:%s", cluster, topic)
 			subpack := packets.NewControlPacket(packets.Subscribe).(*packets.SubscribePacket)
 			subpack.Topics = []string{topic.(string)}
 			subpack.Qoss = []byte{0}
@@ -197,13 +201,15 @@ func (c *Cluster) syncNodeTopics(wg *sync.WaitGroup, cluster config.ClusterNode)
 }
 
 // when two cluster nodes are reconnected, topics that need to synchronize
-func (c *Cluster) SyncTopics() {
+func (c *Cluster) SyncTopics(clientId string) {
 	wg := sync.WaitGroup{}
 	for _, cluster := range config.Clusters() {
-		wg.Add(1)
-		func(wg *sync.WaitGroup, cluster config.ClusterNode) {
-			go c.syncNodeTopics(wg, cluster)
-		}(&wg, cluster)
+		if clientId == cluster.Name {
+			wg.Add(1)
+			func(wg *sync.WaitGroup, cluster config.ClusterNode) {
+				go c.syncNodeTopics(wg, cluster)
+			}(&wg, cluster)
+		}
 	}
 	wg.Wait()
 }
@@ -212,9 +218,8 @@ func (c *Cluster) CheckHealthy() {
 	for _, cluster := range config.Clusters() {
 		clientId := strings.TrimSpace(cluster.Name)
 		exist, ok := c.s.Clusters().Load(clientId)
-		logger.Debugf("CheckHealthy clientId:%s, ok:%v", clientId, ok)
 		if !ok {
-			logger.Infof("connect to cluster:%+v", cluster)
+			logger.Infof("CheckHealthy fail, connect to cluster:%+v", cluster)
 			func(cluster config.ClusterNode) {
 				go c.StartClient(cluster)
 			}(cluster)
