@@ -22,11 +22,16 @@ docker run -d -p 1884:1884 --name amqtt werbenhu/amqtt
 ## 4.性能测试
 
 测试环境：
+
 System: CentOS Linux release 7.6.1810 (Core)
+
 CPU(s): 32, Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
+
 MemTotal: 32708532 kB
 
+
 测试工具：
+
 使用的 [inovex/mqtt-stresser][2]，这里采用的是非集群模式单节点测试，只测试跟mosquitto的对比。
 
  - 1个客户端，每客户端发10000条消息
@@ -60,6 +65,7 @@ MemTotal: 32708532 kB
  
 
  - 1000个客户端，每客户端发10条消息
+
 `docker run --rm inovex/mqtt-stresser -broker tcp://x.x.x.x:1884 -num-clients 1000 -num-messages 10 -no-progress`
 
 |indicator	| amqtt	| mosquitto |
