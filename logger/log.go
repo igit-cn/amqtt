@@ -2,11 +2,16 @@ package logger
 
 import (
 	log "github.com/sirupsen/logrus"
+	"github.com/werbenhu/amqtt/config"
 )
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{})
-	log.SetLevel(log.DebugLevel)
+	if config.Debug() {
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
 }
 
 func Debug(args ...interface{}) {

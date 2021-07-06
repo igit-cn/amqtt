@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"strings"
@@ -89,13 +88,13 @@ func (c *Cluster) StartServer() {
 		if err != nil {
 			logger.Fatalf("tsl listen to %s Err:%s", tcpHost, err)
 		}
-		fmt.Printf("start cluster tcp listen to %s and tls is on ...\n", tcpHost)
+		logger.Info("start cluster tcp listen to %s and tls is on ...\n", tcpHost)
 	} else {
 		tcpListener, err = net.Listen("tcp", tcpHost)
 		if err != nil {
 			logger.Fatalf("tcp listen to %s Err:%s", tcpHost, err)
 		}
-		fmt.Printf("start cluster tcp listen to %s ...\n", tcpHost)
+		logger.Info("start cluster tcp listen to %s ...\n", tcpHost)
 	}
 
 	for {

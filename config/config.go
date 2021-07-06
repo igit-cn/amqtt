@@ -15,6 +15,8 @@ type ClusterNode struct {
 }
 
 type Config struct {
+	Debug bool
+
 	TcpHost string
 	TcpPort int
 	TcpTls  bool
@@ -107,6 +109,10 @@ func Configure(args []string) error {
 	}
 
 	return nil
+}
+
+func Debug() bool {
+	return cfg.Debug
 }
 
 func Clusters() []ClusterNode {
