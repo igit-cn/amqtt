@@ -32,14 +32,14 @@ MemTotal: 32708532 kB
  - 1个客户端，每客户端发10000条消息
 `docker run --rm inovex/mqtt-stresser -broker tcp://x.x.x.x:1884 -num-clients 1 -num-messages 10000 -no-progress`
 
-|indicator	|amqtt	|mosquitto|
-|--|--|
-|Pub Fastest	|28279 msg/sec|	46459 msg/sec|
-|Pub Slowest|	28279 msg/sec|	46459 msg/sec|
-|Pub Median|	28279 msg/sec|	46459 msg/sec|
-|Rece Fastest|	61479 msg/sec|	44560 msg/sec|
-|Rece Slowest|	61479 msg/sec|	44560 msg/sec|
-|Rece Median|	61479 msg/sec|	44560 msg/sec|
+| indicator	| amqtt	| mosquitto |
+| ------------- | ------------- | ------------- |
+| Pub Fastest	|28279 msg/sec |	46459 msg/sec |
+| Pub Slowest |	28279 msg/sec |	46459 msg/sec |
+| Pub Median |	28279 msg/sec |	46459 msg/sec |
+| Rece Fastest |	61479 msg/sec |	44560 msg/sec |
+| Rece Slowest |	61479 msg/sec |	44560 msg/sec |
+| Rece Median |	61479 msg/sec |	44560 msg/sec |
 
 
 
