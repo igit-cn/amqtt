@@ -39,19 +39,19 @@ MemTotal: 32708532 kB
 
 使用的 [inovex/mqtt-stresser][3]，这里采用的是非集群模式单节点测试，只测试跟mosquitto的对比。
 
- - 1个客户端，每客户端发10000条消息
 
-`docker run --rm inovex/mqtt-stresser -broker tcp://x.x.x.x:1884 -num-clients 1 -num-messages 10000 -no-progress`
+ - 1000个客户端，每客户端发10条消息
 
-| indicator	| amqtt	| mosquitto |
+`docker run --rm inovex/mqtt-stresser -broker tcp://x.x.x.x:1884 -num-clients 1000 -num-messages 10 -no-progress`
+
+|indicator	| amqtt	| mosquitto |
 | ------------- | ------------- | ------------- |
-| Pub Fastest	|28279 msg/sec |	46459 msg/sec |
-| Pub Slowest |	28279 msg/sec |	46459 msg/sec |
-| Pub Median |	28279 msg/sec |	46459 msg/sec |
-| Rece Fastest |	61479 msg/sec |	44560 msg/sec |
-| Rece Slowest |	61479 msg/sec |	44560 msg/sec |
-| Rece Median |	61479 msg/sec |	44560 msg/sec |
-
+| Pub Fastest	| 34370 msg/sec |	34238 msg/sec |
+| Pub Slowest	| 2645 msg/sec |	736 msg/sec |
+| Pub Median	| 21729 msg/sec |	22432 msg/sec |
+| Rece Fastest	 | 684 msg/sec |	494 msg/sec |
+| Rece Slowest	| 330 msg/sec |	146 msg/sec |
+| Rece Median |	458 msg/sec	| 190 msg/sec |
 
 
  - 10个客户端，每客户端发1000条消息
@@ -67,20 +67,20 @@ MemTotal: 32708532 kB
 | Rece Slowest |	9670 msg/sec |	3086 msg/sec |
 | Rece Median |	11204 msg/sec |	3150 msg/sec |
 
- 
 
- - 1000个客户端，每客户端发10条消息
+ - 1个客户端，每客户端发10000条消息
 
-`docker run --rm inovex/mqtt-stresser -broker tcp://x.x.x.x:1884 -num-clients 1000 -num-messages 10 -no-progress`
+`docker run --rm inovex/mqtt-stresser -broker tcp://x.x.x.x:1884 -num-clients 1 -num-messages 10000 -no-progress`
 
-|indicator	| amqtt	| mosquitto |
+| indicator	| amqtt	| mosquitto |
 | ------------- | ------------- | ------------- |
-| Pub Fastest	| 34370 msg/sec |	34238 msg/sec |
-| Pub Slowest	| 2645 msg/sec |	736 msg/sec |
-| Pub Median	| 21729 msg/sec |	22432 msg/sec |
-| Rece Fastest	 | 684 msg/sec |	494 msg/sec |
-| Rece Slowest	| 330 msg/sec |	146 msg/sec |
-| Rece Median |	458 msg/sec	| 190 msg/sec |
+| Pub Fastest	|28279 msg/sec |	46459 msg/sec |
+| Pub Slowest |	28279 msg/sec |	46459 msg/sec |
+| Pub Median |	28279 msg/sec |	46459 msg/sec |
+| Rece Fastest |	61479 msg/sec |	44560 msg/sec |
+| Rece Slowest |	61479 msg/sec |	44560 msg/sec |
+| Rece Median |	61479 msg/sec |	44560 msg/sec |
+ 
 
 
   [1]: https://github.com/werbenhu/amqtt/blob/master/conf.toml
