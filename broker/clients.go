@@ -38,6 +38,9 @@ func (c *Client) ReadLoop(processor ifs.Processor) {
 			packet, err := c.ReadPacket()
 			if err != nil {
 				logger.Debugf("Client ReadLoop read packet error: %+v\n", err)
+				// if the client has disconnected ungracefully.
+				// the broker sends the last-will message to all subscribed clients of the last-will message topic.
+				// 如果连接异常，要发送遗嘱消息给所有订阅了该遗嘱消息主题的所有客户端
 				if c.will != nil {
 					processor.ProcessMessage(c, c.will)
 				}

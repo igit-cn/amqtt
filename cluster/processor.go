@@ -19,6 +19,8 @@ func NewProcessor(server ifs.Server) *Processor {
 }
 
 func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
+
+	//send message to the clients in the current node that have subscribed to the topic
 	subs := p.s.BrokerTopics().Subscribers(topic)
 	history := make(map[string]bool)
 	for _, sub := range subs {
@@ -36,8 +38,8 @@ func (p *Processor) ProcessPublish(client ifs.Client, packet *packets.PublishPac
 	topic := packet.TopicName
 	p.DoPublish(topic, packet)
 
-	//If other cluster node have this retain message, then the current cluster node must delete this retain message
-	//Ensure that there is only one retain message for a topic in the entire clusters
+	//if other cluster node have this retain message, then the current cluster node must delete this retain message
+	//ensure that there is only one retain message for a topic in the entire clusters
 	if packet.Retain {
 		p.s.BrokerTopics().RemoveRetain(topic)
 	}
@@ -86,6 +88,7 @@ func (p *Processor) ProcessDisconnect(client ifs.Client) {
 	p.s.Clusters().Delete(client.GetId())
 	client.Close()
 
+	//when a node in the cluster is disconnected, the node must unsubscript it's all topics
 	for topic := range client.Topics() {
 		logger.Debugf("ProcessDisconnect topic:%s", topic)
 		client.RemoveTopic(topic)

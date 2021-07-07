@@ -87,6 +87,7 @@ func (p *Processor) DoPublish(topic string, packet *packets.PublishPacket) {
 		}
 	}
 
+	//send the message to other nodes in the cluster that have subscribed to the topic
 	clusterSubs := p.s.ClusterTopics().Subscribers(topic)
 	clusterrHistory := make(map[string]bool)
 	for _, sub := range clusterSubs {
@@ -176,6 +177,8 @@ func (p *Processor) ProcessSubscribe(client ifs.Client, packet *packets.Subscrib
 			//if subcribe topic not exist, add subcribe count
 			atomic.AddInt64(&p.s.State().SubCount, 1)
 		}
+
+		//search the retain msg of this topic, if there is a retain msg send it to this client
 		retains, _ := p.s.BrokerTopics().SearchRetain(topic)
 		for _, retain := range retains {
 			pubpack := retain.(*packets.PublishPacket)
@@ -200,6 +203,7 @@ func (p *Processor) ProcessDisconnect(client ifs.Client) {
 	logger.Debugf("broker ProcessDisconnect clientId:%s\n", client.GetId())
 	client.Close()
 
+	//when a client disconnected, the client must unsubscript it's all topics
 	for topic := range client.Topics() {
 		logger.Debugf("ProcessDisconnect topic:%s", topic)
 		client.RemoveTopic(topic)
@@ -248,6 +252,7 @@ func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 	client.SetId(clientId)
 	p.s.Clients().Store(clientId, client)
 
+	// if connection has will msg, save it in client
 	if cp.WillFlag {
 		will := packets.NewControlPacket(packets.Publish).(*packets.PublishPacket)
 		will.Retain = cp.WillRetain
@@ -258,6 +263,7 @@ func (p *Processor) ProcessConnect(client ifs.Client, cp *packets.ConnectPacket)
 		client.(*Client).SetWill(will)
 	}
 
+	//count the number of connections
 	atomic.AddInt64(&p.s.State().ClientsTotal, 1)
 	atomic.AddInt64(&p.s.State().ClientsConnected, 1)
 	if atomic.LoadInt64(&p.s.State().ClientsConnected) > atomic.LoadInt64(&p.s.State().ClientsMax) {
