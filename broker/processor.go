@@ -32,18 +32,18 @@ func (p *Processor) checkQos2Msg(messageId uint16) error {
 	if _, found := p.qos2Msgs[messageId]; found {
 		delete(p.qos2Msgs, messageId)
 	} else {
-		return errors.New("RC_PACKET_IDENTIFIER_NOT_FOUND")
+		return errors.New("QOS2 MSG NOT FOUND ERROR")
 	}
 	return nil
 }
 
 func (p *Processor) saveQos2Msg(messageId uint16) error {
 	if p.isQos2MsgFull() {
-		return errors.New("DROPPED_QOS2_PACKET_FOR_TOO_MANY_AWAITING_REL")
+		return errors.New("QOS2 MSG FULL ERROR")
 	}
 
 	if _, found := p.qos2Msgs[messageId]; found {
-		return errors.New("RC_PACKET_IDENTIFIER_IN_USE")
+		return errors.New("QOS2 MSG ALL EXIST ERROR")
 	}
 	p.qos2Msgs[messageId] = time.Now().Unix()
 	time.AfterFunc(time.Duration(Qos2Timeout)*time.Second, p.expireQos2Msg)
