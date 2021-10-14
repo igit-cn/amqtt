@@ -7,7 +7,6 @@
  - 支持分布式集群
  - 支持eclipse/paho.mqtt.golang、MQTT.fx、MQTTX等客户端
 
-
 ## 2.单机模式
 
 ```
