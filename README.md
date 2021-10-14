@@ -7,7 +7,10 @@
  - 支持分布式集群
  - 支持eclipse/paho.mqtt.golang、MQTT.fx、MQTTX等客户端
 
-## 2.单机模式
+## 2.关于解包模块
+目前解包部分使用的是: github.com/eclipse/paho.mqtt.golang/packets
+
+## 3.单机模式
 
 ```
 docker pull werbenhu/amqtt:latest
@@ -19,11 +22,11 @@ docker run -d -p 1884:1884 --name amqtt werbenhu/amqtt
 docker run -d -p 1884:1884 -v ./conf.toml:/go/amqtt.toml -e CONFIG="/go/amqtt.toml" --name amqtt werbenhu/amqtt
 ```
 
-## 3.集群模式
+## 4.集群模式
 请参考[examples][2]
 
 
-## 4.性能测试
+## 5.性能测试
 
 测试环境：
 
